@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공통코드 관리 - BTA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='common_code.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">공통코드 관리</h1>
+            <a href="/" class="home-button">홈</a>
+        </div>
+        
+        <div class="common-code-container">
+            <div class="master-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>대분류</h2>
+                </div>
+                <div id="masterGrid" class="ag-theme-alpine"></div>
+            </div>
+            
+            <div class="detail-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>중분류</h2>
+                    <button id="exportExcelButton" class="export-excel-button">엑셀 다운로드</button>
+                    <button id="addButton" class="add-button">+</button>
+                </div>
+                <div id="detailGrid" class="ag-theme-alpine"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">중분류 등록</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <table class="modal-form">
+                    <tr>
+                        <td><span class="required-field">*</span> 코드</td>
+                        <td>
+                            <input type="text" id="modalCode" class="modal-input" maxlength="10">
+                            <span class="modal-note" id="codeNote">숫자만 입력 가능</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 구분</td>
+                        <td><input type="text" id="modalCategory" class="modal-input" maxlength="50"></td>
+                    </tr>
+                    <tr>
+                        <td>설명</td>
+                        <td><input type="text" id="modalDescription" class="modal-input" maxlength="100"></td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 순서</td>
+                        <td><input type="number" id="modalSort" class="modal-input" min="0" step="1"></td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 시작일</td>
+                        <td><input type="date" id="modalStartDate" class="modal-input" max="9999-12-31"></td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 종료일</td>
+                        <td><input type="date" id="modalEndDate" class="modal-input" max="9999-12-31"></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="saveButton" class="save-button">저장</button>
+                <button id="cancelButton" class="cancel-button">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        let selectedTypeCd = null;
+        let isEditMode = false;
+        let editDocumentId = null;
+        
+        const masterColumnDefs = [
+            { field: 'type_nm', headerName: '구분', flex: 1, sortable: true }
+        ];
+        
+        const detailColumnDefs = [
+            { field: 'value_cd', headerName: '코드', width: 90, sortable: true },
+            { field: 'value_nm', headerName: '구분', width: 140, sortable: true },
+            { field: 'value_descrition', headerName: '설명', flex: 1, sortable: true },
+            { field: 'sort', headerName: '순서', width: 80, sortable: true, type: 'numericColumn' },
+            { 
+                field: 'start_ymd', 
+                headerName: '시작일', 
+                width: 120,
+                valueFormatter: function(params) {
+                    if (!params.value || params.value.length !== 8) return params.value;
+                    return params.value.substring(0, 4) + '-' + params.value.substring(4, 6) + '-' + params.value.substring(6, 8);
+                }
+            },
+            { 
+                field: 'end_ymd', 
+                headerName: '종료일', 
+                width: 120,
+                valueFormatter: function(params) {
+                    if (!params.value || params.value.length !== 8) return params.value;
+                    return params.value.substring(0, 4) + '-' + params.value.substring(4, 6) + '-' + params.value.substring(6, 8);
+                }
+            },
+            {
+                headerName: '편집',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="edit-btn">수정</button>';
+                },
+                onCellClicked: function(params) {
+                    openEditModal(params.data);
+                }
+            },
+            {
+                headerName: '삭제',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="delete-btn">삭제</button>';
+                },
+                onCellClicked: function(params) {
+                    deleteDetailItem(params.data);
+                }
+            }
+        ];
+        
+        const masterGridOptions = {
+            columnDefs: masterColumnDefs,
+            rowSelection: 'single',
+            suppressRowClickSelection: false,
+            onFirstDataRendered: function(event) {
+                if (event.api.getDisplayedRowCount() > 0) {
+                    const firstNode = event.api.getRowNode({ rowIndex: 0 });
+                    if (firstNode) {
+                        firstNode.setSelected(true, true);
+                        event.api.ensureIndexVisible(0, 'middle');
+                    }
+                }
+            },
+            onRowClicked: function(event) {
+                if (event.data) {
+                    selectedTypeCd = event.data.type_cd;
+                    loadDetailData(selectedTypeCd);
+                }
+            }
+        };
+        
+        const detailGridOptions = {
+            columnDefs: detailColumnDefs,
+            defaultColDef: {
+                resizable: true
+            },
+            domLayout: 'normal',
+            rowHeight: 40
+        };
+        
+        const masterGridApi = agGrid.createGrid(document.querySelector('#masterGrid'), masterGridOptions);
+        const detailGridApi = agGrid.createGrid(document.querySelector('#detailGrid'), detailGridOptions);
+        
+        function loadMasterData() {
+            db.collection('bta_lookup_type').get()
+                .then(function(querySnapshot) {
+                    const data = [];
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        data.push({
+                            type_cd: docData.type_cd || doc.id,
+                            type_nm: docData.type_nm || ''
+                        });
+                    });
+                    data.sort(function(a, b) {
+                        const codeA = a.type_cd || '';
+                        const codeB = b.type_cd || '';
+                        return codeA.localeCompare(codeB);
+                    });
+                    masterGridApi.setGridOption('rowData', data);
+                    if (data.length > 0) {
+                        selectedTypeCd = data[0].type_cd;
+                        loadDetailData(selectedTypeCd);
+                        setTimeout(function() {
+                            try {
+                                masterGridApi.forEachNode(function(node) {
+                                    if (node.rowIndex === 0) {
+                                        node.setSelected(true, true);
+                                        masterGridApi.ensureIndexVisible(0, 'middle');
+                                        return;
+                                    }
+                                });
+                            } catch (e) {
+                                console.error('첫 행 선택 오류:', e);
+                            }
+                        }, 200);
+                        setTimeout(function() {
+                            try {
+                                masterGridApi.forEachNode(function(node) {
+                                    if (node.rowIndex === 0 && !node.isSelected()) {
+                                        node.setSelected(true, true);
+                                    }
+                                });
+                            } catch (e) {
+                                console.error('첫 행 재선택 오류:', e);
+                            }
+                        }, 600);
+                    } else {
+                        detailGridApi.setGridOption('rowData', []);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('대분류 데이터 로드 오류:', error);
+                    console.error('오류 코드:', error.code);
+                    console.error('오류 메시지:', error.message);
+                    let errorMessage = '대분류 데이터를 불러오는 중 오류가 발생했습니다.';
+                    if (error.code === 'permission-denied') {
+                        errorMessage += '\n\nFirestore 보안 규칙을 확인해주세요.';
+                        errorMessage += '\n\nFirebase 콘솔 > Firestore Database > 규칙 탭에서';
+                        errorMessage += '\n인증된 사용자에게 읽기 권한을 부여해야 합니다.';
+                    } else if (error.message) {
+                        errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
+                        errorMessage += '\n오류 메시지: ' + error.message;
+                    }
+                    alert(errorMessage);
+                });
+        }
+        
+        function loadDetailData(typeCd) {
+            if (!typeCd) {
+                detailGridApi.setGridOption('rowData', []);
+                return;
+            }
+            
+            db.collection('bta_lookup_value')
+                .where('type_cd', '==', typeCd)
+                .get()
+                .then(function(querySnapshot) {
+                    const data = [];
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        data.push({
+                            id: doc.id,
+                            value_cd: docData.value_cd || '',
+                            value_nm: docData.value_nm || '',
+                            value_descrition: docData.value_descrition || '',
+                            sort: docData.sort !== undefined ? docData.sort : null,
+                            start_ymd: docData.start_ymd || '',
+                            end_ymd: docData.end_ymd || ''
+                        });
+                    });
+                    data.sort(function(a, b) {
+                        const sortA = a.sort !== undefined && a.sort !== null ? a.sort : 0;
+                        const sortB = b.sort !== undefined && b.sort !== null ? b.sort : 0;
+                        if (sortA !== sortB) {
+                            return sortA - sortB;
+                        }
+                        const codeA = parseInt(a.value_cd) || 0;
+                        const codeB = parseInt(b.value_cd) || 0;
+                        return codeA - codeB;
+                    });
+                    detailGridApi.setGridOption('rowData', data);
+                })
+                .catch(function(error) {
+                    console.error('중분류 데이터 로드 오류:', error);
+                    let errorMessage = '중분류 데이터를 불러오는 중 오류가 발생했습니다.';
+                    if (error.code === 'permission-denied') {
+                        errorMessage += '\n\nFirestore 보안 규칙을 확인해주세요.';
+                    } else if (error.message) {
+                        errorMessage += '\n\n오류: ' + error.message;
+                    }
+                    alert(errorMessage);
+                });
+        }
+        
+        function openAddModal() {
+            isEditMode = false;
+            editDocumentId = null;
+            document.getElementById('modalTitle').textContent = '중분류 등록';
+            document.getElementById('modalCode').value = '';
+            document.getElementById('modalCode').disabled = false;
+            document.getElementById('codeNote').textContent = '숫자만 입력 가능';
+            document.getElementById('modalCategory').value = '';
+            document.getElementById('modalDescription').value = '';
+            document.getElementById('modalSort').value = '';
+            document.getElementById('modalStartDate').value = '';
+            document.getElementById('modalEndDate').value = '';
+            document.getElementById('modal').style.display = 'block';
+        }
+        
+        function openEditModal(data) {
+            isEditMode = true;
+            editDocumentId = data.id;
+            document.getElementById('modalTitle').textContent = '중분류 수정';
+            document.getElementById('modalCode').value = data.value_cd || '';
+            document.getElementById('modalCode').disabled = true;
+            document.getElementById('codeNote').textContent = '코드는 수정할 수 없습니다';
+            document.getElementById('modalCategory').value = data.value_nm || '';
+            document.getElementById('modalDescription').value = data.value_descrition || '';
+            document.getElementById('modalSort').value = data.sort !== undefined && data.sort !== null ? data.sort : '';
+            
+            if (data.start_ymd && data.start_ymd.length === 8) {
+                const startDate = data.start_ymd.substring(0, 4) + '-' + data.start_ymd.substring(4, 6) + '-' + data.start_ymd.substring(6, 8);
+                document.getElementById('modalStartDate').value = startDate;
+            } else {
+                document.getElementById('modalStartDate').value = '';
+            }
+            
+            if (data.end_ymd && data.end_ymd.length === 8) {
+                const endDate = data.end_ymd.substring(0, 4) + '-' + data.end_ymd.substring(4, 6) + '-' + data.end_ymd.substring(6, 8);
+                document.getElementById('modalEndDate').value = endDate;
+            } else {
+                document.getElementById('modalEndDate').value = '';
+            }
+            
+            document.getElementById('modal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+        
+        function formatDateToYmd(dateString) {
+            if (!dateString) return '';
+            return dateString.replace(/-/g, '');
+        }
+        
+        function saveDetailItem() {
+            if (!selectedTypeCd) {
+                alert('대분류를 선택해주세요.');
+                return;
+            }
+            
+            const code = document.getElementById('modalCode').value.trim();
+            const category = document.getElementById('modalCategory').value.trim();
+            const description = document.getElementById('modalDescription').value.trim();
+            const sortValue = document.getElementById('modalSort').value.trim();
+            const sort = sortValue ? parseInt(sortValue, 10) : null;
+            const startDate = document.getElementById('modalStartDate').value;
+            const endDate = document.getElementById('modalEndDate').value;
+            
+            if (!code) {
+                alert('코드를 입력해주세요.');
+                return;
+            }
+            
+            if (!/^\d+$/.test(code)) {
+                alert('코드는 숫자만 입력 가능합니다.');
+                return;
+            }
+            
+            if (!category) {
+                alert('구분을 입력해주세요.');
+                return;
+            }
+            
+            if (sort === null || sort === undefined || sort === '') {
+                alert('순서를 입력해주세요.');
+                return;
+            }
+            
+            if (!startDate) {
+                alert('시작일을 입력해주세요.');
+                return;
+            }
+            
+            if (!endDate) {
+                alert('종료일을 입력해주세요.');
+                return;
+            }
+            
+            const data = {
+                value_cd: code,
+                type_cd: selectedTypeCd,
+                value_nm: category,
+                value_descrition: description,
+                sort: sort,
+                start_ymd: formatDateToYmd(startDate),
+                end_ymd: formatDateToYmd(endDate)
+            };
+            
+            if (isEditMode) {
+                db.collection('bta_lookup_value').doc(editDocumentId).update(data)
+                    .then(function() {
+                        alert('수정되었습니다.');
+                        closeModal();
+                        loadDetailData(selectedTypeCd);
+                    })
+                    .catch(function(error) {
+                        console.error('수정 오류:', error);
+                        alert('수정 중 오류가 발생했습니다: ' + error.message);
+                    });
+            } else {
+                db.collection('bta_lookup_value').add(data)
+                    .then(function() {
+                        alert('등록되었습니다.');
+                        closeModal();
+                        loadDetailData(selectedTypeCd);
+                    })
+                    .catch(function(error) {
+                        console.error('등록 오류:', error);
+                        alert('등록 중 오류가 발생했습니다: ' + error.message);
+                    });
+            }
+        }
+        
+        function deleteDetailItem(data) {
+            if (!confirm('정말 삭제하시겠습니까?')) {
+                return;
+            }
+            
+            db.collection('bta_lookup_value').doc(data.id).delete()
+                .then(function() {
+                    alert('삭제되었습니다.');
+                    loadDetailData(selectedTypeCd);
+                })
+                .catch(function(error) {
+                    console.error('삭제 오류:', error);
+                    alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                });
+        }
+        
+        function exportToExcel() {
+            const rowData = [];
+            detailGridApi.forEachNode(function(node) {
+                if (node.data) {
+                    rowData.push(node.data);
+                }
+            });
+            
+            if (rowData.length === 0) {
+                alert('다운로드할 데이터가 없습니다.');
+                return;
+            }
+            
+            const exportData = rowData.map(function(item) {
+                let startDate = '';
+                if (item.start_ymd && item.start_ymd.length === 8) {
+                    startDate = item.start_ymd.substring(0, 4) + '-' + item.start_ymd.substring(4, 6) + '-' + item.start_ymd.substring(6, 8);
+                }
+                
+                let endDate = '';
+                if (item.end_ymd && item.end_ymd.length === 8) {
+                    endDate = item.end_ymd.substring(0, 4) + '-' + item.end_ymd.substring(4, 6) + '-' + item.end_ymd.substring(6, 8);
+                }
+                
+                return {
+                    '코드': item.value_cd || '',
+                    '구분': item.value_nm || '',
+                    '설명': item.value_descrition || '',
+                    '순서': item.sort !== undefined && item.sort !== null ? item.sort : '',
+                    '시작일': startDate,
+                    '종료일': endDate
+                };
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '중분류');
+            
+            const fileName = '중분류_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            XLSX.writeFile(wb, fileName);
+        }
+        
+        document.getElementById('exportExcelButton').addEventListener('click', exportToExcel);
+        
+        document.getElementById('addButton').addEventListener('click', function() {
+            if (!selectedTypeCd) {
+                alert('대분류를 먼저 선택해주세요.');
+                return;
+            }
+            openAddModal();
+        });
+        
+        document.getElementById('saveButton').addEventListener('click', saveDetailItem);
+        
+        document.getElementById('cancelButton').addEventListener('click', closeModal);
+        
+        document.querySelector('.close-button').addEventListener('click', closeModal);
+        
+        document.getElementById('modalCode').addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/[^\d]/g, '');
+        });
+        
+        function validateDateInput(input) {
+            if (!input.value) return;
+            const dateValue = input.value;
+            if (dateValue.length >= 5 && dateValue.indexOf('-') === -1) {
+                const year = dateValue.substring(0, 4);
+                if (year.length === 4 && /^\d{4}$/.test(year)) {
+                    const rest = dateValue.substring(4);
+                    if (rest.length >= 2) {
+                        const month = rest.substring(0, 2);
+                        const day = rest.substring(2, 4);
+                        if (/^\d{2}$/.test(month) && /^\d{2}$/.test(day)) {
+                            input.value = year + '-' + month + '-' + day;
+                        }
+                    }
+                }
+            }
+            if (input.value && input.value.length > 10) {
+                input.value = input.value.substring(0, 10);
+            }
+        }
+        
+        document.getElementById('modalStartDate').addEventListener('input', function(e) {
+            validateDateInput(e.target);
+        });
+        
+        document.getElementById('modalStartDate').addEventListener('blur', function(e) {
+            validateDateInput(e.target);
+            if (e.target.value) {
+                const date = new Date(e.target.value);
+                if (date.getFullYear() > 9999) {
+                    e.target.value = '9999-12-31';
+                }
+            }
+        });
+        
+        document.getElementById('modalEndDate').addEventListener('input', function(e) {
+            validateDateInput(e.target);
+        });
+        
+        document.getElementById('modalEndDate').addEventListener('blur', function(e) {
+            validateDateInput(e.target);
+            if (e.target.value) {
+                const date = new Date(e.target.value);
+                if (date.getFullYear() > 9999) {
+                    e.target.value = '9999-12-31';
+                }
+            }
+        });
+        
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                loadMasterData();
+            } else {
+                window.location.href = '/login';
+            }
+        });
+    </script>
+</body>
+</html>

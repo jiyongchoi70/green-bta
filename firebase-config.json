@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "242686436668",
+    "project_id": "greentree-bta",
+    "storage_bucket": "greentree-bta.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:242686436668:android:1e2bdfeb9f37ba62f06a39",
+        "android_client_info": {
+          "package_name": "com.greentree.bta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQQ5pAccety6OewHpZFbKh8WMrVJb6Kxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학생방 - 행사신청</title>
+    <link rel="stylesheet" href="../../static/style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQQ5pAccety6OewHpZFbKh8WMrVJb6Kxg",
+            projectId: "greentree-bta",
+            storageBucket: "greentree-bta.firebasestorage.app"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+            console.log('Firebase 초기화 완료');
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">학생방 - 행사신청</h1>
+            <a href="../../" class="home-button">홈</a>
+        </div>
+        
+        <div class="announcements-content">
+            <div class="content-section">
+                <h2>행사신청 내용</h2>
+                <div class="announcement-item">
+                    <p class="announcement-text">여기에 행사신청 내용이 표시됩니다.</p>
+                    <p class="announcement-date">2024년 1월 22일</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

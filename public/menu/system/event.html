@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>반배정(권한포함) - BTA</title>
+    <link rel="stylesheet" href="../../static/style.css">
+    <link rel="stylesheet" href="../../static/class_assignment.css">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="../../static/common_code_util.js"></script>
+    <script src="../../static/user_search_modal.js"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQQ5pAccety6OewHpZFbKh8WMrVJb6Kxg",
+            projectId: "greentree-bta",
+            storageBucket: "greentree-bta.firebasestorage.app"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">반배정(권한포함)</h1>
+            <a href="../../" class="home-button">홈</a>
+        </div>
+        
+        <div class="class-assignment-container">
+            <div class="class-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>반등록</h2>
+                    <button id="addClassButton" class="add-button">+</button>
+                </div>
+                <div id="classGrid" class="ag-theme-alpine"></div>
+            </div>
+            
+            <div class="student-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>학생등록(권한포함)</h2>
+                    <button id="exportExcelButton" class="export-excel-button">엑셀 다운로드</button>
+                    <button id="addStudentButton" class="add-button">+</button>
+                </div>
+                <div id="studentForm" class="student-form" style="display: none;">
+                    <table class="form-table">
+                        <tr>
+                            <td>성명</td>
+                            <td>
+                                <div class="input-with-icon">
+                                    <input type="text" id="studentName" class="form-input" readonly>
+                                    <button id="searchUserButton" class="search-icon-button">🔍</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>사용자구분</td>
+                            <td>
+                                <input type="text" id="studentUserType" class="form-input" readonly>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>전화번호</td>
+                            <td>
+                                <input type="text" id="studentPhone" class="form-input" readonly>
+                            </td>
+                        </tr>
+                    </table>
+                    <div class="form-buttons">
+                        <button id="saveStudentButton" class="save-button">저장</button>
+                        <button id="cancelStudentFormButton" class="cancel-button">취소</button>
+                    </div>
+                </div>
+                <div id="studentGrid" class="ag-theme-alpine"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="classModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="classModalTitle">반등록</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <table class="modal-form">
+                    <tr>
+                        <td>학기</td>
+                        <td>
+                            <select id="modalSemester" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>반명</td>
+                        <td>
+                            <select id="modalClassName" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="saveClassButton" class="save-button">저장</button>
+                <button id="cancelClassButton" class="cancel-button">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="userSearchModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>사용자 조회(학부모, 신입생 제외)</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="search-section">
+                    <div class="search-fields">
+                        <div class="search-field">
+                            <label>성명</label>
+                            <input type="text" id="searchUserName" class="search-input" placeholder="성명 입력">
+                        </div>
+                        <div class="search-field">
+                            <label>전화번호</label>
+                            <input type="text" id="searchUserPhone" class="search-input" placeholder="전화번호 입력">
+                        </div>
+                        <div class="search-field">
+                            <label>사용자구분</label>
+                            <select id="searchUserUserType" class="search-select search-select-small">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label>재학구분</label>
+                            <select id="searchUserStudentStatus" class="search-select search-select-small">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <button id="searchUserSearchButton" class="search-button">조회</button>
+                    </div>
+                </div>
+                <div id="userSearchGrid" class="ag-theme-alpine" style="height: 400px; margin-top: 15px;"></div>
+                <div style="margin-top: 10px; padding: 10px; background-color: #e3f2fd; border-radius: 4px; color: #1976d2; font-size: 14px;">
+                    💡 <strong>사용법:</strong> 체크박스를 선택한 후, 하단의 <strong>"저장" 버튼</strong>을 클릭하세요.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="selectUserConfirmButton" class="save-button">저장</button>
+                <button id="closeUserSearchButton" class="cancel-button">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="userSearchModal2" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>사용자 조회2 (사용자구분 : 학부모, 신입생 제외함)</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="search-section">
+                    <div class="search-fields">
+                        <div class="search-field">
+                            <label>성명</label>
+                            <input type="text" id="searchUserName2" class="search-input" placeholder="성명 입력">
+                        </div>
+                        <div class="search-field">
+                            <label>전화번호</label>
+                            <input type="text" id="searchUserPhone2" class="search-input" placeholder="전화번호 입력">
+                        </div>
+                        <div class="search-field">
+                            <label>재학구분</label>
+                            <select id="searchUserStudentStatus2" class="search-select">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <button id="searchUserSearchButton2" class="search-button">조회</button>
+                    </div>
+                </div>
+                <div id="userSearchGrid2" class="ag-theme-alpine" style="height: 400px; margin-top: 15px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveSelectedUsersButton2" class="save-button">저장</button>
+                <button id="closeUserSearchButton2" class="cancel-button">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        let selectedClassId = null;
+        let semesterList = [];
+        let classNameList = [];
+        let studentStatusList = [];
+        let userTypeList = [];
+        let allStudentData = [];
+        let classIdCounter = 1;
+        
+        function getCurrentDateYmd() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return year + month + day;
+        }
+        
+        function loadLookupLists() {
+            const currentDate = getCurrentDateYmd();
+            
+            Promise.all([
+                getLookupValueList(db, '140', currentDate),
+                getLookupValueList(db, '120', currentDate),
+                getLookupValueList(db, '130', currentDate),
+                getLookupValueList(db, '110', currentDate)
+            ]).then(function(results) {
+                semesterList = results[0] || [];
+                classNameList = results[1] || [];
+                studentStatusList = results[2] || [];
+                userTypeList = results[3] || [];
+                
+                // sort 필드 기준으로 내림차순 정렬
+                semesterList.sort(function(a, b) {
+                    const sortA = a.sort || 0;
+                    const sortB = b.sort || 0;
+                    return sortB - sortA; // 내림차순 (desc)
+                });
+                
+                const semesterSelect = document.getElementById('modalSemester');
+                if (semesterSelect) {
+                    semesterSelect.innerHTML = '<option value="">선택하세요</option>';
+                    semesterList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        semesterSelect.appendChild(option);
+                    });
+                }
+                
+                const classNameSelect = document.getElementById('modalClassName');
+                if (classNameSelect) {
+                    classNameSelect.innerHTML = '<option value="">선택하세요</option>';
+                    classNameList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        classNameSelect.appendChild(option);
+                    });
+                }
+                
+                const searchUserStudentStatusSelect = document.getElementById('searchUserStudentStatus');
+                if (searchUserStudentStatusSelect) {
+                    searchUserStudentStatusSelect.innerHTML = '<option value="">전체</option>';
+                    let defaultStudentStatusCd = ''; // 기본값으로 사용할 재학 코드
+                    studentStatusList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        searchUserStudentStatusSelect.appendChild(option);
+                        // "재학"을 기본값으로 설정
+                        if (item.value_nm === '재학') {
+                            defaultStudentStatusCd = item.value_cd;
+                        }
+                    });
+                    // 재학을 기본값으로 설정
+                    if (defaultStudentStatusCd) {
+                        searchUserStudentStatusSelect.value = defaultStudentStatusCd;
+                    }
+                }
+                
+                const searchUserStudentStatusSelect2 = document.getElementById('searchUserStudentStatus2');
+                if (searchUserStudentStatusSelect2) {
+                    searchUserStudentStatusSelect2.innerHTML = '<option value="">전체</option>';
+                    studentStatusList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        searchUserStudentStatusSelect2.appendChild(option);
+                    });
+                }
+                
+                // 공통 사용자조회 모달 초기화 (반배정등록용)
+                if (typeof UserSearchModal !== 'undefined') {
+                    UserSearchModal.init({
+                        title: '사용자 조회(학부모, 신입생 제외)',
+                        userTypeDefault: null, // 수정 가능
+                        userTypeDisabled: false,
+                        collectionName: 'bta_class_students',
+                        idFieldName: 'class_id',
+                        getSelectedId: function() { return selectedClassId; },
+                        loadDataCallback: loadStudentData,
+                        studentStatusList: studentStatusList,
+                        userTypeList: userTypeList,
+                        db: db,
+                        getCurrentDateYmd: getCurrentDateYmd
+                    });
+                }
+            }).catch(function(error) {
+                console.error('공통코드 로드 오류:', error);
+            });
+        }
+        
+        const classColumnDefs = [
+            { field: 'semester_nm', headerName: '학기', flex: 1, sortable: true },
+            { field: 'class_nm', headerName: '반명', flex: 1, sortable: true },
+            {
+                headerName: '삭제',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="delete-btn">삭제</button>';
+                },
+                onCellClicked: function(params) {
+                    deleteClass(params.data);
+                }
+            }
+        ];
+        
+        const studentColumnDefs = [
+            { field: 'name', headerName: '성명', width: 150, sortable: true },
+            { field: 'user_type_nm', headerName: '사용자구분', width: 150, sortable: true },
+            { field: 'phone', headerName: '전화번호', width: 180, sortable: true },
+            {
+                headerName: '삭제',
+                width: 100,
+                cellRenderer: function(params) {
+                    return '<button class="delete-btn">삭제</button>';
+                },
+                onCellClicked: function(params) {
+                    deleteStudent(params.data);
+                }
+            }
+        ];
+        
+        const classGridOptions = {
+            columnDefs: classColumnDefs,
+            rowSelection: 'single',
+            suppressRowClickSelection: false,
+            onFirstDataRendered: function(event) {
+                if (event.api.getDisplayedRowCount() > 0) {
+                    const firstNode = event.api.getRowNode({ rowIndex: 0 });
+                    if (firstNode) {
+                        firstNode.setSelected(true, true);
+                        event.api.ensureIndexVisible(0, 'middle');
+                    }
+                }
+            },
+            onRowClicked: function(event) {
+                if (event.data) {
+                    selectedClassId = event.data.class_id;
+                    loadStudentData(selectedClassId);
+                }
+            }
+        };
+        
+        const studentGridOptions = {
+            columnDefs: studentColumnDefs,
+            defaultColDef: {
+                resizable: true
+            },
+            domLayout: 'normal',
+            rowHeight: 40
+        };
+        
+        const classGridApi = agGrid.createGrid(document.querySelector('#classGrid'), classGridOptions);
+        const studentGridApi = agGrid.createGrid(document.querySelector('#studentGrid'), studentGridOptions);
+        
+        function loadClassData() {
+            const currentDate = getCurrentDateYmd();
+            
+            db.collection('bta_class').get()
+                .then(function(querySnapshot) {
+                    const promises = [];
+                    const data = [];
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        const semesterCd = docData.semester_cd || '';
+                        const classCd = docData.class_cd || '';
+                        
+                        const classPromise = Promise.all([
+                            semesterCd ? getLookupValueName(db, '140', semesterCd, currentDate) : Promise.resolve(null),
+                            classCd ? getLookupValueName(db, '120', classCd, currentDate) : Promise.resolve(null),
+                            semesterCd ? getLookupValueSort(db, '140', semesterCd, currentDate) : Promise.resolve(0),
+                            classCd ? getLookupValueSort(db, '120', classCd, currentDate) : Promise.resolve(0)
+                        ]).then(function(results) {
+                            data.push({
+                                class_id: doc.id,
+                                semester_cd: semesterCd,
+                                semester_nm: results[0] || '',
+                                class_cd: classCd,
+                                class_nm: results[1] || '',
+                                semester_sort: results[2] || 0,
+                                class_sort: results[3] || 0
+                            });
+                        });
+                        
+                        promises.push(classPromise);
+                    });
+                    
+                    return Promise.all(promises).then(function() {
+                        return data;
+                    });
+                })
+                .then(function(data) {
+                    data.sort(function(a, b) {
+                        if (a.semester_sort !== b.semester_sort) {
+                            return b.semester_sort - a.semester_sort; // 내림차순 (desc)
+                        }
+                        return a.class_sort - b.class_sort;
+                    });
+                    
+                    classGridApi.setGridOption('rowData', data);
+                    if (data.length > 0) {
+                        selectedClassId = data[0].class_id;
+                        loadStudentData(selectedClassId);
+                        setTimeout(function() {
+                            try {
+                                classGridApi.forEachNode(function(node) {
+                                    if (node.rowIndex === 0) {
+                                        node.setSelected(true, true);
+                                        classGridApi.ensureIndexVisible(0, 'middle');
+                                        return;
+                                    }
+                                });
+                            } catch (e) {
+                                console.error('첫 행 선택 오류:', e);
+                            }
+                        }, 200);
+                    } else {
+                        studentGridApi.setGridOption('rowData', []);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('반등록 데이터 로드 오류:', error);
+                    let errorMessage = '반등록 데이터를 불러오는 중 오류가 발생했습니다.';
+                    if (error.code === 'permission-denied') {
+                        errorMessage += '\n\nFirestore 보안 규칙을 확인해주세요.';
+                        errorMessage += '\n\nFirebase 콘솔 > Firestore Database > 규칙 탭에서';
+                        errorMessage += '\n다음 규칙을 추가해주세요:';
+                        errorMessage += '\n\nmatch /bta_class/{document=**} {';
+                        errorMessage += '\n  allow read, write: if request.auth != null;';
+                        errorMessage += '\n}';
+                        errorMessage += '\n\nmatch /bta_class_students/{document=**} {';
+                        errorMessage += '\n  allow read, write: if request.auth != null;';
+                        errorMessage += '\n}';
+                    } else if (error.message) {
+                        errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
+                        errorMessage += '\n오류 메시지: ' + error.message;
+                    }
+                    alert(errorMessage);
+                });
+        }
+        
+        function loadStudentData(classId) {
+            if (!classId) {
+                studentGridApi.setGridOption('rowData', []);
+                return;
+            }
+            
+            const currentDate = getCurrentDateYmd();
+            
+            db.collection('bta_class_students')
+                .where('class_id', '==', classId)
+                .get()
+                .then(function(querySnapshot) {
+                    const promises = [];
+                    const data = [];
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        const userId = docData.userid || '';
+                        
+                        if (!userId) {
+                            return;
+                        }
+                        
+                        const studentPromise = db.collection('bta_users')
+                            .where('userId', '==', userId)
+                            .get()
+                            .then(function(userSnapshot) {
+                                if (userSnapshot.empty) {
+                                    return;
+                                }
+                                
+                                const userDoc = userSnapshot.docs[0];
+                                const userData = userDoc.data();
+                                const userTypeCd = userData.user_type || '';
+                                const studentStatusCd = userData.student_status || '';
+                                
+                                return getLookupValueName(db, '110', userTypeCd, currentDate)
+                                    .then(function(userTypeNm) {
+                                        return getLookupValueSort(db, '110', userTypeCd, currentDate)
+                                            .then(function(userTypeSort) {
+                                                data.push({
+                                                    id: doc.id,
+                                                    userId: userId,
+                                                    name: userData.name || '',
+                                                    user_type: userTypeCd,
+                                                    user_type_nm: userTypeNm || '',
+                                                    phone: userData.phone || '',
+                                                    student_status: studentStatusCd,
+                                                    user_type_sort: userTypeSort || 0
+                                                });
+                                            });
+                                    });
+                            });
+                        
+                        promises.push(studentPromise);
+                    });
+                    
+                    return Promise.all(promises).then(function() {
+                        return data;
+                    });
+                })
+                .then(function(data) {
+                    data.sort(function(a, b) {
+                        if (a.user_type_sort !== b.user_type_sort) {
+                            return a.user_type_sort - b.user_type_sort;
+                        }
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+                    
+                    allStudentData = data;
+                    studentGridApi.setGridOption('rowData', data);
+                    setTimeout(function() {
+                        try {
+                            if (studentGridApi && studentGridApi.sizeColumnsToFit) {
+                                studentGridApi.sizeColumnsToFit();
+                            }
+                        } catch (e) {
+                            console.error('컬럼 크기 조정 오류:', e);
+                        }
+                    }, 100);
+                })
+                .catch(function(error) {
+                    console.error('학생등록 데이터 로드 오류:', error);
+                    let errorMessage = '학생등록 데이터를 불러오는 중 오류가 발생했습니다.';
+                    if (error.code === 'permission-denied') {
+                        errorMessage += '\n\nFirestore 보안 규칙을 확인해주세요.';
+                        errorMessage += '\n\nFirebase 콘솔 > Firestore Database > 규칙 탭에서';
+                        errorMessage += '\n다음 규칙을 추가해주세요:';
+                        errorMessage += '\n\nmatch /bta_class_students/{document=**} {';
+                        errorMessage += '\n  allow read, write: if request.auth != null;';
+                        errorMessage += '\n}';
+                    } else if (error.message) {
+                        errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
+                        errorMessage += '\n오류 메시지: ' + error.message;
+                    }
+                    alert(errorMessage);
+                });
+        }
+        
+        function openAddClassModal() {
+            document.getElementById('classModalTitle').textContent = '반등록';
+            document.getElementById('modalSemester').value = '';
+            document.getElementById('modalClassName').value = '';
+            document.getElementById('classModal').style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+        
+        function closeClassModal() {
+            document.getElementById('classModal').style.display = 'none';
+            // 모든 모달이 닫혀있는지 확인 후 modal-open 클래스 제거
+            checkAndRemoveModalClass();
+        }
+        
+        function checkAndRemoveModalClass() {
+            const classModal = document.getElementById('classModal');
+            const userSearchModal = document.getElementById('userSearchModal');
+            const userSearchModal2 = document.getElementById('userSearchModal2');
+            
+            // 모든 모달이 닫혀있는지 확인
+            const allModalsClosed = 
+                (!classModal || classModal.style.display === 'none' || classModal.style.display === '') &&
+                (!userSearchModal || userSearchModal.style.display === 'none' || userSearchModal.style.display === '') &&
+                (!userSearchModal2 || userSearchModal2.style.display === 'none' || userSearchModal2.style.display === '');
+            
+            if (allModalsClosed) {
+                document.body.classList.remove('modal-open');
+            }
+        }
+        
+        
+        function saveClass() {
+            const semesterCd = document.getElementById('modalSemester').value;
+            const classCd = document.getElementById('modalClassName').value;
+            
+            if (!semesterCd) {
+                alert('학기를 선택해주세요.');
+                return;
+            }
+            
+            if (!classCd) {
+                alert('반명을 선택해주세요.');
+                return;
+            }
+            
+            db.collection('bta_class')
+                .where('semester_cd', '==', semesterCd)
+                .where('class_cd', '==', classCd)
+                .get()
+                .then(function(querySnapshot) {
+                    if (!querySnapshot.empty) {
+                        alert('이미 등록된 학기와 반명 조합입니다.');
+                        return Promise.reject(new Error('중복'));
+                    }
+                    
+                    const data = {
+                        semester_cd: semesterCd,
+                        class_cd: classCd
+                    };
+                    
+                    return db.collection('bta_class').add(data);
+                })
+                .then(function() {
+                    alert('등록되었습니다.');
+                    closeClassModal();
+                    loadClassData();
+                })
+                .catch(function(error) {
+                    if (error.message !== '중복') {
+                        console.error('등록 오류:', error);
+                        alert('등록 중 오류가 발생했습니다: ' + error.message);
+                    }
+                });
+        }
+        
+        function deleteClass(data) {
+            if (!confirm('정말 삭제하시겠습니까?')) {
+                return;
+            }
+            
+            db.collection('bta_class_students')
+                .where('class_id', '==', data.class_id)
+                .get()
+                .then(function(querySnapshot) {
+                    if (!querySnapshot.empty) {
+                        alert('등록된 학생이 있어 삭제할 수 없습니다.');
+                        return Promise.reject(new Error('학생 존재'));
+                    }
+                    
+                    return db.collection('bta_class').doc(data.class_id).delete();
+                })
+                .then(function() {
+                    alert('삭제되었습니다.');
+                    loadClassData();
+                })
+                .catch(function(error) {
+                    if (error.message !== '학생 존재') {
+                        console.error('삭제 오류:', error);
+                        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                    }
+                });
+        }
+        
+        function openAddStudentForm() {
+            if (!selectedClassId) {
+                alert('반을 먼저 선택해주세요.');
+                return;
+            }
+            
+            // 사용자조회 모달 열기
+            openUserSearchModal();
+        }
+        
+        function closeStudentForm() {
+            document.getElementById('studentForm').style.display = 'none';
+        }
+        
+        function saveStudent() {
+            if (!selectedClassId) {
+                alert('반을 먼저 선택해주세요.');
+                return;
+            }
+            
+            const userId = document.getElementById('studentName').getAttribute('data-userid');
+            
+            if (!userId) {
+                alert('사용자를 선택해주세요.');
+                return;
+            }
+            
+            db.collection('bta_class_students')
+                .where('class_id', '==', selectedClassId)
+                .where('userid', '==', userId)
+                .get()
+                .then(function(querySnapshot) {
+                    if (!querySnapshot.empty) {
+                        alert('이미 등록된 학생입니다.');
+                        return Promise.reject(new Error('중복'));
+                    }
+                    
+                    const data = {
+                        class_id: selectedClassId,
+                        userid: userId
+                    };
+                    
+                    return db.collection('bta_class_students').add(data);
+                })
+                .then(function() {
+                    alert('등록되었습니다.');
+                    document.getElementById('studentForm').style.display = 'none';
+                    document.getElementById('studentName').value = '';
+                    document.getElementById('studentName').removeAttribute('data-userid');
+                    document.getElementById('studentUserType').value = '';
+                    document.getElementById('studentPhone').value = '';
+                    loadStudentData(selectedClassId);
+                })
+                .catch(function(error) {
+                    if (error.message !== '중복') {
+                        console.error('등록 오류:', error);
+                        alert('등록 중 오류가 발생했습니다: ' + error.message);
+                    }
+                });
+        }
+        
+        function deleteStudent(data) {
+            if (!confirm('정말 삭제하시겠습니까?')) {
+                return;
+            }
+            
+            db.collection('bta_class_students').doc(data.id).delete()
+                .then(function() {
+                    alert('삭제되었습니다.');
+                    loadStudentData(selectedClassId);
+                })
+                .catch(function(error) {
+                    console.error('삭제 오류:', error);
+                    alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                });
+        }
+        
+        function openUserSearchModal() {
+            document.getElementById('searchUserName').value = '';
+            document.getElementById('searchUserPhone').value = '';
+            const searchUserStudentStatusSelect = document.getElementById('searchUserStudentStatus');
+            if (searchUserStudentStatusSelect) {
+                // 재학을 기본값으로 설정
+                let defaultStudentStatusCd = '';
+                studentStatusList.forEach(function(item) {
+                    if (item.value_nm === '재학') {
+                        defaultStudentStatusCd = item.value_cd;
+                    }
+                });
+                if (defaultStudentStatusCd) {
+                    searchUserStudentStatusSelect.value = defaultStudentStatusCd;
+                } else {
+                    searchUserStudentStatusSelect.value = '';
+                }
+            }
+            const searchUserUserTypeSelect = document.getElementById('searchUserUserType');
+            if (searchUserUserTypeSelect) {
+                searchUserUserTypeSelect.value = '';
+            }
+            document.getElementById('userSearchModal').style.display = 'block';
+            document.body.classList.add('modal-open');
+            
+            // 그리드가 없으면 초기화 (최초 1회만)
+            if (!userSearchGridApi) {
+                setTimeout(function() {
+                    initUserSearchGrid();
+                    attachUserSearchGridClickHandler();
+                }, 300);
+            } else {
+                // 그리드가 이미 있으면 데이터만 초기화
+                if (userSearchGridApi) {
+                    userSearchGridApi.setGridOption('rowData', []);
+                    userSearchGridApi.deselectAll();
+                }
+            }
+        }
+        
+        // 그리드 클릭 이벤트 핸들러를 한 번만 추가하는 함수
+        function attachUserSearchGridClickHandler() {
+            const gridElement = document.querySelector('#userSearchGrid');
+            if (!gridElement) {
+                console.error('❌ 그리드 요소를 찾을 수 없음');
+                return;
+            }
+            
+            // 기존 이벤트 리스너가 있으면 제거 (중복 방지)
+            if (userSearchGridClickHandler) {
+                gridElement.removeEventListener('click', userSearchGridClickHandler, true);
+            }
+            
+            // 새 이벤트 리스너 생성
+            userSearchGridClickHandler = function(event) {
+                console.log('========================================');
+                console.log('🖱️ 그리드 클릭!');
+                
+                // 체크박스 직접 클릭은 AG-Grid가 처리하도록 허용
+                if (event.target.type === 'checkbox' || event.target.closest('.ag-checkbox')) {
+                    console.log('✅ 체크박스 직접 클릭 - AG-Grid가 처리');
+                    console.log('========================================');
+                    return;
+                }
+                
+                // 1. 클릭 위치로 행 인덱스 계산
+                const clickY = event.clientY;
+                const gridRect = gridElement.getBoundingClientRect();
+                const relativeY = clickY - gridRect.top;
+                
+                console.log('📍 클릭 위치 (Y):', clickY);
+                console.log('📦 그리드 위치 (top):', gridRect.top);
+                console.log('📐 상대 위치:', relativeY);
+                
+                // 헤더 높이 제외 (약 40px)
+                const headerHeight = 40;
+                const rowHeight = 40;
+                
+                if (relativeY < headerHeight) {
+                    console.log('⚠️ 헤더 클릭');
+                    console.log('========================================');
+                    return;
+                }
+                
+                // 행 인덱스 계산
+                const rowIndex = Math.floor((relativeY - headerHeight) / rowHeight);
+                console.log('📊 계산된 행 인덱스:', rowIndex);
+                
+                // 2. 인덱스로 데이터 가져오기
+                if (rowIndex < 0 || rowIndex >= allUserData.length) {
+                    console.log('⚠️ 유효하지 않은 인덱스 (빈 공간 클릭?)');
+                    console.log('전체 데이터 개수:', allUserData.length);
+                    console.log('========================================');
+                    return;
+                }
+                
+                const foundData = allUserData[rowIndex];
+                console.log('✅ 데이터 찾음! (인덱스:', rowIndex, ')');
+                console.log('  - userId:', foundData.userId);
+                console.log('  - name:', foundData.name);
+                console.log('  - phone:', foundData.phone);
+                
+                // 3. AG-Grid API로 행 선택/해제 토글
+                try {
+                    // 모든 행 노드 가져오기
+                    const allRowNodes = [];
+                    if (userSearchGridApi) {
+                        userSearchGridApi.forEachNode(function(node) {
+                            allRowNodes.push(node);
+                        });
+                    }
+                    
+                    if (rowIndex < allRowNodes.length) {
+                        const rowNode = allRowNodes[rowIndex];
+                        const wasSelected = rowNode.isSelected();
+                        
+                        // 선택 상태 토글
+                        rowNode.setSelected(!wasSelected);
+                        
+                        console.log('✅ 행 선택 상태 변경:', !wasSelected, '→', rowNode.isSelected());
+                        
+                        // 4. 시각적 효과 (모든 셀 초기화)
+                        const allCells = gridElement.querySelectorAll('.ag-cell');
+                        allCells.forEach(function(cell) {
+                            cell.style.backgroundColor = '';
+                            cell.style.fontWeight = '';
+                            cell.style.setProperty('background-color', '', 'important');
+                        });
+                        
+                        // 5. 선택된 행의 모든 셀 찾기 (Y 좌표 기반)
+                        const expectedRowTop = gridRect.top + headerHeight + (rowIndex * rowHeight);
+                        const expectedRowBottom = expectedRowTop + rowHeight;
+                        
+                        console.log('📍 예상 행 위치:', expectedRowTop, '~', expectedRowBottom);
+                        
+                        // 모든 셀을 순회하며 Y 좌표로 행 찾기
+                        let foundCells = 0;
+                        allCells.forEach(function(cell) {
+                            const cellRect = cell.getBoundingClientRect();
+                            const cellCenterY = cellRect.top + (cellRect.height / 2);
+                            
+                            // 셀이 선택된 행 범위 안에 있는지 확인
+                            if (cellCenterY >= expectedRowTop && cellCenterY < expectedRowBottom) {
+                                if (rowNode.isSelected()) {
+                                    cell.style.setProperty('background-color', '#e3f2fd', 'important');
+                                    cell.style.setProperty('font-weight', 'bold', 'important');
+                                    foundCells++;
+                                }
+                            }
+                        });
+                        
+                        console.log('✅ Y 좌표 기반으로 셀 찾음:', foundCells, '개');
+                        
+                        if (foundCells === 0 && rowNode.isSelected()) {
+                            console.log('⚠️ 셀을 찾지 못함, 대체 방법 시도...');
+                            
+                            // 대체 방법: 텍스트 매칭
+                            allCells.forEach(function(cell) {
+                                const cellText = cell.textContent.trim();
+                                if (cellText === foundData.name || 
+                                    cellText === foundData.phone || 
+                                    cellText === foundData.user_type_nm ||
+                                    cellText === foundData.student_status_nm ||
+                                    (foundData.name && cellText.includes(foundData.name)) ||
+                                    (foundData.phone && cellText.includes(foundData.phone)) ||
+                                    (foundData.user_type_nm && cellText.includes(foundData.user_type_nm))) {
+                                    cell.style.setProperty('background-color', '#e3f2fd', 'important');
+                                    cell.style.setProperty('font-weight', 'bold', 'important');
+                                }
+                            });
+                            console.log('✅ 텍스트 매칭으로 셀 찾음');
+                        }
+                        
+                        console.log('✅ 시각적 선택 효과 적용 완료');
+                    } else {
+                        console.error('❌ 행 노드를 찾을 수 없음:', rowIndex, '>=', allRowNodes.length);
+                    }
+                } catch (e) {
+                    console.error('❌ 행 선택 오류:', e);
+                }
+                
+                console.log('========================================');
+            };
+            
+            // 이벤트 리스너 추가
+            gridElement.addEventListener('click', userSearchGridClickHandler, true);
+            console.log('✅ 사용자조회 그리드 이벤트 연결 완료!');
+        }
+        
+        function closeUserSearchModal() {
+            document.getElementById('userSearchModal').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            checkAndRemoveModalClass();
+            
+            // 모달이 닫힐 때 그리드 초기화
+            if (userSearchGridApi) {
+                userSearchGridApi.setGridOption('rowData', []);
+                userSearchGridApi.deselectAll();
+                allUserData = []; // 전역 데이터도 초기화
+            }
+            
+            // 이벤트 리스너 제거
+            const gridElement = document.querySelector('#userSearchGrid');
+            if (gridElement && userSearchGridClickHandler) {
+                gridElement.removeEventListener('click', userSearchGridClickHandler, true);
+                userSearchGridClickHandler = null;
+            }
+        }
+        
+        let selectedUserData = null;
+        let allUserData = [];
+        let userSearchGridClickHandler = null; // 이벤트 리스너 중복 방지
+        
+        function searchUsers() {
+            const searchName = document.getElementById('searchUserName').value.trim();
+            const searchPhone = document.getElementById('searchUserPhone').value.trim();
+            const searchStudentStatus = document.getElementById('searchUserStudentStatus').value;
+            const searchUserType = document.getElementById('searchUserUserType').value;
+            
+            const normalizePhone = function(phone) {
+                return (phone || '').replace(/-/g, '');
+            };
+            
+            const normalizedSearchPhone = searchPhone ? normalizePhone(searchPhone) : '';
+            const currentDate = getCurrentDateYmd();
+            
+            db.collection('bta_users').get()
+                .then(function(querySnapshot) {
+                    const promises = [];
+                    const data = [];
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        const userType = docData.user_type;
+                        const studentStatus = docData.student_status;
+                        
+                        if (userType === '120' || userType === '150') {
+                            return;
+                        }
+                        
+                        if (!userType || userType === '') {
+                            return;
+                        }
+                        
+                        const name = docData.name || '';
+                        const phone = docData.phone || '';
+                        
+                        if (searchName && !name.startsWith(searchName)) {
+                            return;
+                        }
+                        if (normalizedSearchPhone && !normalizePhone(phone).startsWith(normalizedSearchPhone)) {
+                            return;
+                        }
+                        if (searchStudentStatus && studentStatus !== searchStudentStatus) {
+                            return;
+                        }
+                        if (searchUserType && userType !== searchUserType) {
+                            return;
+                        }
+                        
+                        const userPromise = getLookupValueName(db, '110', userType, currentDate)
+                            .then(function(userTypeNm) {
+                                return getLookupValueName(db, '130', studentStatus || '', currentDate)
+                                    .then(function(studentStatusNm) {
+                                        data.push({
+                                            userId: docData.userId || '',
+                                            name: name,
+                                            phone: phone,
+                                            user_type: userType,
+                                            user_type_nm: userTypeNm || '',
+                                            student_status: studentStatus || '',
+                                            student_status_nm: studentStatusNm || ''
+                                        });
+                                    });
+                            });
+                        
+                        promises.push(userPromise);
+                    });
+                    
+                    return Promise.all(promises).then(function() {
+                        return data;
+                    });
+                })
+                .then(function(data) {
+                    data.sort(function(a, b) {
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+                    
+                    // 전역 변수에 모든 데이터 저장
+                    allUserData = data;
+                    
+                    if (userSearchGridApi) {
+                        // AG-Grid의 onModelUpdated 콜백을 사용하여 데이터가 완전히 렌더링된 후 처리
+                        userSearchGridApi.setGridOption('rowData', data);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('사용자 검색 오류:', error);
+                    alert('사용자 검색 중 오류가 발생했습니다.');
+                });
+        }
+        
+        function saveSelectedUsers() {
+            if (!selectedClassId) {
+                alert('반을 먼저 선택해주세요.');
+                return;
+            }
+            
+            if (!userSearchGridApi) {
+                alert('그리드가 초기화되지 않았습니다.');
+                return;
+            }
+            
+            const selectedRows = userSearchGridApi.getSelectedRows();
+            
+            if (selectedRows.length === 0) {
+                alert('선택된 사용자가 없습니다.');
+                return;
+            }
+            
+            const checkPromises = selectedRows.map(function(row) {
+                const userId = row.userId || '';
+                if (!userId) {
+                    return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
+                }
+                
+                return db.collection('bta_class_students')
+                    .where('class_id', '==', selectedClassId)
+                    .where('userid', '==', userId)
+                    .get()
+                    .then(function(querySnapshot) {
+                        return {
+                            duplicate: !querySnapshot.empty,
+                            name: row.name || '',
+                            userId: userId
+                        };
+                    });
+            });
+            
+            Promise.all(checkPromises)
+                .then(function(results) {
+                    const duplicates = results.filter(function(r) { return r.duplicate; });
+                    
+                    if (duplicates.length > 0) {
+                        const duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
+                        alert(duplicateNames + '이 등록되어 있습니다.');
+                        return Promise.reject(new Error('duplicate'));
+                    }
+                    
+                    const validUsers = results.filter(function(r) { return r.userId; });
+                    if (validUsers.length === 0) {
+                        return Promise.resolve();
+                    }
+                    
+                    const savePromises = validUsers.map(function(r) {
+                        const saveData = {
+                            class_id: selectedClassId,
+                            userid: r.userId
+                        };
+                        return db.collection('bta_class_students').add(saveData);
+                    });
+                    
+                    return Promise.all(savePromises);
+                })
+                .then(function() {
+                    if (selectedRows.length > 0) {
+                        alert('등록되었습니다.');
+                        closeUserSearchModal();
+                        loadStudentData(selectedClassId);
+                    }
+                })
+                .catch(function(error) {
+                    if (error && error.message === 'duplicate') {
+                        return;
+                    }
+                    console.error('등록 오류:', error);
+                    alert('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
+                });
+        }
+        
+        let userSearchGridApi = null;
+        
+        function initUserSearchGrid() {
+            const gridElement = document.querySelector('#userSearchGrid');
+            if (!gridElement) {
+                return;
+            }
+            
+            if (userSearchGridApi) {
+                try {
+                    userSearchGridApi.destroy();
+                } catch (e) {
+                    console.error('그리드 파괴 오류:', e);
+                }
+            }
+            
+            const userSearchColumnDefs = [
+                { 
+                    checkboxSelection: true,
+                    headerCheckboxSelection: false,
+                    width: 50,
+                    pinned: 'left',
+                    suppressMenu: true,
+                    sortable: false,
+                    filter: false,
+                    resizable: false
+                },
+                { field: 'name', headerName: '성명', width: 150, sortable: true },
+                { field: 'phone', headerName: '전화번호', width: 150, sortable: true },
+                { field: 'user_type_nm', headerName: '사용자구분', width: 150, sortable: true },
+                { field: 'student_status_nm', headerName: '재학구분', width: 150, sortable: true }
+            ];
+            
+            const userSearchGridOptions = {
+                columnDefs: userSearchColumnDefs,
+                rowSelection: 'multiple',
+                suppressRowClickSelection: false,
+                defaultColDef: {
+                    resizable: true
+                },
+                domLayout: 'normal',
+                rowHeight: 40
+            };
+            
+            try {
+                userSearchGridApi = agGrid.createGrid(gridElement, userSearchGridOptions);
+            } catch (e) {
+                console.error('그리드 초기화 오류:', e);
+            }
+        }
+        
+        let userSearchGridApi2 = null;
+        
+        function openUserSearchModal2() {
+            document.getElementById('searchUserName2').value = '';
+            document.getElementById('searchUserPhone2').value = '';
+            document.getElementById('searchUserStudentStatus2').value = '';
+            document.getElementById('userSearchModal2').style.display = 'block';
+            document.body.classList.add('modal-open');
+            
+            setTimeout(function() {
+                const gridElement = document.querySelector('#userSearchGrid2');
+                if (!gridElement) {
+                    console.error('userSearchGrid2 요소를 찾을 수 없습니다.');
+                    return;
+                }
+                
+                if (typeof agGrid === 'undefined') {
+                    console.error('agGrid가 로드되지 않았습니다.');
+                    return;
+                }
+                
+                if (userSearchGridApi2) {
+                    try {
+                        userSearchGridApi2.destroy();
+                    } catch (e) {
+                        console.error('그리드 파괴 오류:', e);
+                    }
+                }
+                
+                const userSearchColumnDefs2 = [
+                    { field: 'name', headerName: '성명', width: 120, sortable: true },
+                    { field: 'phone', headerName: '전화번호', width: 150, sortable: true },
+                    { field: 'user_type_nm', headerName: '사용자구분', width: 120, sortable: true },
+                    { field: 'student_status_nm', headerName: '재학구분', width: 120, sortable: true }
+                ];
+                
+                const userSearchGridOptions2 = {
+                    columnDefs: userSearchColumnDefs2,
+                    rowSelection: 'single',
+                    suppressRowClickSelection: false,
+                    onRowClicked: function(event) {
+                        if (event.data) {
+                            alert('선택된 행은 ' + event.data.name + '입니다.');
+                        }
+                    }
+                };
+                
+                try {
+                    userSearchGridApi2 = agGrid.createGrid(gridElement, userSearchGridOptions2);
+                    if (userSearchGridApi2) {
+                        userSearchGridApi2.setGridOption('rowData', []);
+                    }
+                } catch (e) {
+                    console.error('그리드 초기화 오류:', e);
+                }
+            }, 500);
+        }
+        
+        function closeUserSearchModal2() {
+            document.getElementById('userSearchModal2').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            checkAndRemoveModalClass();
+        }
+        
+        function searchUsers2() {
+            const searchName = document.getElementById('searchUserName2').value.trim();
+            const searchPhone = document.getElementById('searchUserPhone2').value.trim();
+            const searchStudentStatus = document.getElementById('searchUserStudentStatus2').value;
+            
+            const normalizePhone = function(phone) {
+                return (phone || '').replace(/-/g, '');
+            };
+            
+            const normalizedSearchPhone = searchPhone ? normalizePhone(searchPhone) : '';
+            const currentDate = getCurrentDateYmd();
+            
+            db.collection('bta_users').get()
+                .then(function(querySnapshot) {
+                    const promises = [];
+                    const data = [];
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        const userType = docData.user_type;
+                        const studentStatus = docData.student_status;
+                        
+                        if (userType === '120' || userType === '150') {
+                            return;
+                        }
+                        
+                        if (!userType || userType === '') {
+                            return;
+                        }
+                        
+                        if (!studentStatus || studentStatus === '') {
+                            return;
+                        }
+                        
+                        const name = docData.name || '';
+                        const phone = docData.phone || '';
+                        
+                        if (searchName && !name.startsWith(searchName)) {
+                            return;
+                        }
+                        if (normalizedSearchPhone && !normalizePhone(phone).startsWith(normalizedSearchPhone)) {
+                            return;
+                        }
+                        if (searchStudentStatus && studentStatus !== searchStudentStatus) {
+                            return;
+                        }
+                        
+                        const userPromise = getLookupValueName(db, '110', userType, currentDate)
+                            .then(function(userTypeNm) {
+                                return getLookupValueName(db, '130', docData.student_status || '', currentDate)
+                                    .then(function(studentStatusNm) {
+                                        data.push({
+                                            userId: docData.userId || '',
+                                            name: name,
+                                            phone: phone,
+                                            user_type: userType,
+                                            user_type_nm: userTypeNm || '',
+                                            student_status: docData.student_status || '',
+                                            student_status_nm: studentStatusNm || ''
+                                        });
+                                    });
+                            });
+                        
+                        promises.push(userPromise);
+                    });
+                    
+                    return Promise.all(promises).then(function() {
+                        return data;
+                    });
+                })
+                .then(function(data) {
+                    data.sort(function(a, b) {
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+                    
+                    if (userSearchGridApi2) {
+                        userSearchGridApi2.setGridOption('rowData', data);
+                        
+                        setTimeout(function() {
+                            if (userSearchGridApi2 && userSearchGridApi2.api) {
+                                const rowCount = userSearchGridApi2.api.getDisplayedRowCount();
+                                if (rowCount > 0) {
+                                    userSearchGridApi2.api.forEachNode(function(node) {
+                                        if (node.rowIndex === 0) {
+                                            node.setSelected(true, true);
+                                            userSearchGridApi2.api.ensureIndexVisible(0, 'middle');
+                                            return;
+                                        }
+                                    });
+                                }
+                            }
+                        }, 200);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('사용자 검색 오류:', error);
+                    alert('사용자 검색 중 오류가 발생했습니다.');
+                });
+        }
+        
+        function saveSelectedUsers2() {
+            if (!selectedClassId) {
+                alert('반을 먼저 선택해주세요.');
+                return;
+            }
+            
+            if (!userSearchGridApi2) {
+                alert('그리드가 초기화되지 않았습니다.');
+                return;
+            }
+            
+            let selectedRows = [];
+            userSearchGridApi2.api.forEachNode(function(node) {
+                if (node.isSelected()) {
+                    selectedRows.push(node.data);
+                }
+            });
+            
+            if (selectedRows.length === 0) {
+                alert('선택된 사용자가 없습니다.');
+                return;
+            }
+            
+            const checkPromises = selectedRows.map(function(row) {
+                const userId = row.userId || '';
+                if (!userId) {
+                    return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
+                }
+                
+                return db.collection('bta_class_students')
+                    .where('class_id', '==', selectedClassId)
+                    .where('userid', '==', userId)
+                    .get()
+                    .then(function(querySnapshot) {
+                        return {
+                            duplicate: !querySnapshot.empty,
+                            name: row.name || '',
+                            userId: userId
+                        };
+                    });
+            });
+            
+            Promise.all(checkPromises)
+                .then(function(results) {
+                    const duplicates = results.filter(function(r) { return r.duplicate; });
+                    
+                    if (duplicates.length > 0) {
+                        const duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
+                        alert(duplicateNames + '이 등록되어 있습니다.');
+                        return Promise.reject(new Error('duplicate'));
+                    }
+                    
+                    const validUsers = results.filter(function(r) { return r.userId; });
+                    if (validUsers.length === 0) {
+                        return Promise.resolve();
+                    }
+                    
+                    const savePromises = validUsers.map(function(r) {
+                        const saveData = {
+                            class_id: selectedClassId,
+                            userid: r.userId
+                        };
+                        return db.collection('bta_class_students').add(saveData);
+                    });
+                    
+                    return Promise.all(savePromises);
+                })
+                .then(function() {
+                    if (selectedRows.length > 0) {
+                        alert('등록되었습니다.');
+                        closeUserSearchModal2();
+                        loadStudentData(selectedClassId);
+                    }
+                })
+                .catch(function(error) {
+                    if (error && error.message === 'duplicate') {
+                        return;
+                    }
+                    console.error('등록 오류:', error);
+                    alert('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
+                });
+        }
+        
+        function exportToExcel() {
+            if (allStudentData.length === 0) {
+                alert('다운로드할 데이터가 없습니다.');
+                return;
+            }
+            
+            const exportData = allStudentData.map(function(item) {
+                return {
+                    '성명': item.name || '',
+                    '사용자구분': item.user_type_nm || '',
+                    '전화번호': item.phone || ''
+                };
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '학생등록');
+            
+            const fileName = '학생등록_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            XLSX.writeFile(wb, fileName);
+        }
+        
+        document.getElementById('addClassButton').addEventListener('click', openAddClassModal);
+        document.getElementById('saveClassButton').addEventListener('click', saveClass);
+        document.getElementById('cancelClassButton').addEventListener('click', closeClassModal);
+        
+        document.getElementById('addStudentButton').addEventListener('click', function() {
+            if (typeof UserSearchModal !== 'undefined') {
+                UserSearchModal.open();
+            } else {
+                console.error('UserSearchModal이 로드되지 않았습니다.');
+            }
+        });
+        document.getElementById('saveStudentButton').addEventListener('click', saveStudent);
+        document.getElementById('cancelStudentFormButton').addEventListener('click', closeStudentForm);
+        
+        document.getElementById('exportExcelButton').addEventListener('click', exportToExcel);
+        
+        const searchUserButton = document.getElementById('searchUserButton');
+        if (searchUserButton) {
+            searchUserButton.addEventListener('click', openUserSearchModal);
+        }
+        
+        // 공통 모달에서 이벤트 리스너를 연결하므로 기존 이벤트 리스너 제거
+        // searchUserSearchButton, selectUserConfirmButton, closeUserSearchButton은
+        // user_search_modal.js에서 처리됨
+        
+        document.getElementById('searchUserSearchButton2').addEventListener('click', searchUsers2);
+        document.getElementById('saveSelectedUsersButton2').addEventListener('click', saveSelectedUsers2);
+        document.getElementById('closeUserSearchButton2').addEventListener('click', closeUserSearchModal2);
+        
+        document.querySelectorAll('.close-button').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (btn.closest('#userSearchModal')) {
+                    if (typeof UserSearchModal !== 'undefined') {
+                        UserSearchModal.close();
+                    }
+                } else {
+                    closeClassModal();
+                    closeUserSearchModal2();
+                }
+            });
+        });
+        
+        window.addEventListener('click', function(event) {
+            if (event.target.id === 'classModal') {
+                closeClassModal();
+            }
+            if (event.target.id === 'userSearchModal') {
+                if (typeof UserSearchModal !== 'undefined') {
+                    UserSearchModal.close();
+                }
+            }
+            if (event.target.id === 'userSearchModal2') {
+                closeUserSearchModal2();
+            }
+        });
+        
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                loadLookupLists();
+                loadClassData();
+            } else {
+                window.location.href = '../../login.html';
+            }
+        });
+    </script>
+</body>
+</html>

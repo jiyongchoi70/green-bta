@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ room_name if room_name else '시스템' }} - 전달사항</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='announcements.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">{{ room_name if room_name else '시스템' }} - 전달사항</h1>
+            <a href="/" class="home-button">홈</a>
+        </div>
+        
+        <div class="announcements-management-container">
+            <div class="search-section">
+                <div class="search-fields">
+                    <div class="search-left">
+                        <div class="search-field">
+                            <label>구분</label>
+                            <select id="searchNotificationCd" class="search-select">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <div class="search-field" id="searchUserTypeField">
+                            <label>대상</label>
+                            <select id="searchUserType" class="search-select">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label>제목</label>
+                            <input type="text" id="searchTitle" class="search-input" placeholder="제목 입력">
+                        </div>
+                        <button id="searchButton" class="search-button">조회</button>
+                    </div>
+                    <div class="search-right" id="actionButtonsContainer">
+                        <button id="exportExcelButton" class="export-excel-button">엑셀 다운로드</button>
+                        <button id="addButton" class="add-button">+</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="announcementsGrid" class="ag-theme-alpine"></div>
+        </div>
+    </div>
+    
+    <!-- 등록/수정 모달 (조회 시 modal-view-mode 클래스로 레이아웃 변경) -->
+    <div id="announcementModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="modalHeaderTitle">전달사항 등록</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <table class="modal-form">
+                    <tr>
+                        <td>구분</td>
+                        <td>
+                            <select id="modalNotificationCd" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                        <td>대상</td>
+                        <td>
+                            <select id="modalUserType" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>개시일</td>
+                        <td>
+                            <input type="date" id="modalStartYmd" class="modal-input" max="9999-12-31">
+                        </td>
+                        <td>종료일</td>
+                        <td>
+                            <input type="date" id="modalEndYmd" class="modal-input" max="9999-12-31">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>작성일</td>
+                        <td>
+                            <input type="date" id="modalCreateYmd" class="modal-input" readonly>
+                        </td>
+                        <td>작성자</td>
+                        <td>
+                            <input type="text" id="modalCreateUser" class="modal-input" readonly>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>제목</td>
+                        <td colspan="3">
+                            <input type="text" id="modalAnnouncementTitle" class="modal-input" maxlength="200">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>내용</td>
+                        <td colspan="3">
+                            <textarea id="modalContents" class="modal-textarea" rows="10" maxlength="5000"></textarea>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>첨부파일</td>
+                        <td colspan="3">
+                            <div id="modalFileRow">
+                                <input type="file" id="modalFile" class="modal-input" multiple>
+                                <div id="fileList" style="margin-top: 10px;"></div>
+                            </div>
+                            <div id="existingFiles" style="margin-top: 10px;"></div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="saveButton" type="button" class="save-button">저장</button>
+                <button id="cancelButton" type="button" class="cancel-button">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        
+        let isEditMode = false;
+        let editDocumentId = null;
+        let notificationCdList = [];
+        let userTypeList = [];
+        let allAnnouncementData = [];
+        let currentUser = null;
+        let currentUserData = null;
+        let attachmentsToDelete = [];
+        let newAttachments = [];
+        let selectedFiles = []; // 새로 선택한 파일 목록
+        
+        let announcementsGridApi = null;
+        
+        // room_type 확인 (관리자만 편집 가능)
+        const roomType = '{{ room_type if room_type else "system" }}';
+        const isAdmin = roomType === 'system';
+        
+        // 각 방별 대상 필터 설정
+        const roomUserTypeFilter = {
+            'coach': ['전체', '110'],      // 코치방: 전체, 코치
+            'student': ['전체', '100'],    // 학생방: 전체, 학생
+            'parent': ['전체', '120']      // 학부모방: 전체, 학부모
+        };
+        
+        function getCurrentDateYmd() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return year + month + day;
+        }
+        
+        function formatDateYmdToDash(ymd) {
+            if (!ymd || ymd.length !== 8) return '';
+            return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
+        }
+        
+        function formatDateDashToYmd(dateStr) {
+            if (!dateStr) return '';
+            return dateStr.replace(/-/g, '');
+        }
+        
+        function loadLookupLists() {
+            const currentDate = getCurrentDateYmd();
+            
+            // 구분 (notification_cd) - 공통코드 '150'
+            getLookupValueList(db, '150', currentDate).then(function(list) {
+                notificationCdList = list || [];
+                
+                const searchSelect = document.getElementById('searchNotificationCd');
+                const modalSelect = document.getElementById('modalNotificationCd');
+                
+                if (searchSelect) {
+                    searchSelect.innerHTML = '<option value="">전체</option>';
+                    notificationCdList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        searchSelect.appendChild(option);
+                    });
+                }
+                
+                if (modalSelect) {
+                    modalSelect.innerHTML = '<option value="">선택하세요</option>';
+                    notificationCdList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        modalSelect.appendChild(option);
+                    });
+                }
+            }).catch(function(error) {
+                console.error('구분 공통코드 로드 오류:', error);
+            });
+            
+            // 대상 (user_type) - 공통코드 '110', '전체' 포함 (SQL문에는 '전체'가 없으므로 수동 추가)
+            getLookupValueList(db, '110', currentDate).then(function(list) {
+                userTypeList = list || [];
+                
+                const searchSelect = document.getElementById('searchUserType');
+                const modalSelect = document.getElementById('modalUserType');
+                
+                if (searchSelect) {
+                    searchSelect.innerHTML = '';
+                    // '전체' 옵션 추가 (SQL문에는 없으므로 수동 추가)
+                    const allOption = document.createElement('option');
+                    allOption.value = '전체';
+                    allOption.textContent = '전체';
+                    searchSelect.appendChild(allOption);
+                    
+                    userTypeList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        searchSelect.appendChild(option);
+                    });
+                }
+                
+                if (modalSelect) {
+                    modalSelect.innerHTML = '<option value="">선택하세요</option>';
+                    // '전체' 옵션 추가 (SQL문에는 없으므로 수동 추가)
+                    const allOption = document.createElement('option');
+                    allOption.value = '전체';
+                    allOption.textContent = '전체';
+                    modalSelect.appendChild(allOption);
+                    
+                    userTypeList.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item.value_cd;
+                        option.textContent = item.value_nm;
+                        modalSelect.appendChild(option);
+                    });
+                }
+            }).catch(function(error) {
+                console.error('대상 공통코드 로드 오류:', error);
+            });
+        }
+        
+        function initAnnouncementsGrid() {
+            const gridElement = document.querySelector('#announcementsGrid');
+            if (!gridElement) {
+                return;
+            }
+            
+            if (announcementsGridApi) {
+                try {
+                    announcementsGridApi.destroy();
+                } catch (e) {
+                    console.error('그리드 파괴 오류:', e);
+                }
+            }
+            
+            const columnDefs = [];
+            
+            // 행번호 컬럼 (공통) - 페이지가 바뀌어도 순서 연속
+            columnDefs.push({
+                headerName: '순서',
+                width: 60,
+                sortable: false,
+                valueGetter: function(params) {
+                    if (!params.node) return '';
+                    try {
+                        const api = params.api;
+                        const pageSize = api.getPaginationPageSize ? api.getPaginationPageSize() : 100;
+                        const currentPage = api.paginationGetCurrentPage ? api.paginationGetCurrentPage() : 0;
+                        return (currentPage * pageSize) + params.node.rowIndex + 1;
+                    } catch (e) {
+                        return (params.node.rowIndex ?? 0) + 1;
+                    }
+                }
+            });
+            
+            // 관리자가 아닌 경우 대상, 개시일 컬럼 제외
+            if (isAdmin) {
+                columnDefs.push(
+                    { field: 'notification_cd_nm', headerName: '구분', width: 150, sortable: true },
+                    { field: 'user_type_nm', headerName: '대상', width: 120, sortable: true },
+                    { 
+                        field: 'title', 
+                        headerName: '제목', 
+                        width: 290, 
+                        sortable: true,
+                        cellStyle: { color: '#2563eb', textDecoration: 'underline', cursor: 'pointer' },
+                        onCellClicked: function(params) {
+                            if (params.data) {
+                                openViewModal(params.data);
+                            }
+                        }
+                    },
+                    { field: 'start_ymd_display', headerName: '개시일', width: 120, sortable: true },
+                    { field: 'create_ymd_display', headerName: '작성일', width: 120, sortable: true },
+                    { field: 'create_user_nm', headerName: '작성자', width: 100, sortable: true }
+                );
+            } else {
+                // 관리자가 아닌 경우: 구분, 제목, 작성일, 작성자만 표시 (넓이 확대)
+                columnDefs.push(
+                    { field: 'notification_cd_nm', headerName: '구분', width: 200, sortable: true },
+                    { 
+                        field: 'title', 
+                        headerName: '제목', 
+                        width: 600, 
+                        sortable: true,
+                        cellStyle: { color: '#2563eb', textDecoration: 'underline', cursor: 'pointer' }
+                    },
+                    { field: 'create_ymd_display', headerName: '작성일', width: 150, sortable: true },
+                    { field: 'create_user_nm', headerName: '작성자', width: 130, sortable: true }
+                );
+            }
+            
+            // 관리자만 수정/삭제 컬럼 추가
+            if (isAdmin) {
+                columnDefs.push({
+                    headerName: '수정',
+                    width: 80,
+                    cellRenderer: function(params) {
+                        return '<button class="edit-btn">수정</button>';
+                    },
+                    onCellClicked: function(params) {
+                        openEditModal(params.data);
+                    }
+                });
+                columnDefs.push({
+                    headerName: '삭제',
+                    width: 80,
+                    cellRenderer: function(params) {
+                        return '<button class="delete-btn">삭제</button>';
+                    },
+                    onCellClicked: function(params) {
+                        deleteAnnouncement(params.data);
+                    }
+                });
+            }
+            
+            const gridOptions = {
+                columnDefs: columnDefs,
+                defaultColDef: {
+                    resizable: true
+                },
+                pagination: true,
+                paginationPageSize: 100,
+                domLayout: 'normal',
+                rowHeight: 40
+            };
+            
+            // 관리자가 아닌 경우 행 클릭 시 읽기 전용 모달 열기
+            if (!isAdmin) {
+                gridOptions.onRowClicked = function(event) {
+                    if (event.data) {
+                        openViewModal(event.data);
+                    }
+                };
+            }
+            
+            try {
+                announcementsGridApi = agGrid.createGrid(gridElement, gridOptions);
+            } catch (e) {
+                console.error('그리드 초기화 오류:', e);
+            }
+        }
+        
+        function loadAnnouncementData(searchNotificationCd, searchUserType, searchTitle) {
+            const currentDate = getCurrentDateYmd();
+            
+            db.collection('bta_notifications').get()
+                .then(function(querySnapshot) {
+                    const promises = [];
+                    const data = [];
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const docData = doc.data();
+                        const notificationCd = docData.notification_cd || '';
+                        const userType = docData.user_type || '';
+                        const title = docData.title || '';
+                        
+                        // 검색 필터 적용
+                        if (searchNotificationCd && notificationCd !== searchNotificationCd) {
+                            return;
+                        }
+                        // 대상: '전체' 또는 빈 값이면 user_type 조건 적용 안 함. 특정 대상 선택 시에만 필터 적용
+                        const targetIsAll = !searchUserType || (typeof searchUserType === 'string' && searchUserType.trim() === '') || searchUserType === '전체';
+                        if (!targetIsAll && userType !== searchUserType) {
+                            return;
+                        }
+                        if (searchTitle && !title.includes(searchTitle)) {
+                            return;
+                        }
+                        
+                        // 각 방별 대상 필터 적용 (관리자가 아닌 경우)
+                        if (!isAdmin && roomUserTypeFilter[roomType]) {
+                            const allowedUserTypes = roomUserTypeFilter[roomType];
+                            // 허용된 대상 목록에 포함되지 않으면 제외
+                            if (allowedUserTypes.indexOf(userType) === -1) {
+                                return;
+                            }
+                        }
+                        
+                        // 날짜 필터 적용 (관리자가 아닌 경우: 현재일이 start_ymd와 end_ymd 사이인 것만)
+                        if (!isAdmin) {
+                            const startYmd = docData.start_ymd || '';
+                            const endYmd = docData.end_ymd || '';
+                            
+                            // start_ymd와 end_ymd가 모두 있어야 하고, 현재일이 범위 내에 있어야 함
+                            if (startYmd && endYmd) {
+                                if (currentDate < startYmd || currentDate > endYmd) {
+                                    return; // 현재일이 범위 밖이면 제외
+                                }
+                            } else {
+                                return; // start_ymd 또는 end_ymd가 없으면 제외
+                            }
+                        }
+                        
+                        const notificationPromise = Promise.all([
+                            notificationCd ? getLookupValueName(db, '150', notificationCd, currentDate) : Promise.resolve(null),
+                            userType === '전체' ? Promise.resolve('전체') : (userType ? getLookupValueName(db, '110', userType, currentDate) : Promise.resolve(null)),
+                            docData.create_user ? db.collection('bta_users').where('userId', '==', docData.create_user).get() : Promise.resolve(null)
+                        ]).then(function(results) {
+                            const notificationCdNm = results[0] || '';
+                            const userTypeNm = results[1] || '';
+                            const userQuerySnapshot = results[2];
+                            
+                            let createUserNm = '';
+                            if (userQuerySnapshot && !userQuerySnapshot.empty) {
+                                userQuerySnapshot.forEach(function(userDoc) {
+                                    createUserNm = userDoc.data().name || '';
+                                });
+                            }
+                            
+                            const startYmd = docData.start_ymd || '';
+                            const createYmd = docData.create_ymd || '';
+                            
+                            data.push({
+                                id: doc.id,
+                                notification_id: docData.notification_id || '',
+                                notification_cd: notificationCd,
+                                notification_cd_nm: notificationCdNm,
+                                user_type: userType,
+                                user_type_nm: userTypeNm,
+                                title: title,
+                                contents: docData.contents || '',
+                                start_ymd: startYmd,
+                                start_ymd_display: startYmd.length === 8 ? formatDateYmdToDash(startYmd) : startYmd,
+                                end_ymd: docData.end_ymd || '',
+                                create_ymd: createYmd,
+                                create_ymd_display: createYmd.length === 8 ? formatDateYmdToDash(createYmd) : createYmd,
+                                create_user: docData.create_user || '',
+                                create_user_nm: createUserNm,
+                                update_user: docData.update_user || '',
+                                update_date: docData.update_date || null,
+                                attachments: docData.attachments || []
+                            });
+                        });
+                        
+                        promises.push(notificationPromise);
+                    });
+                    
+                    return Promise.all(promises).then(function() {
+                        return data;
+                    });
+                })
+                .then(function(data) {
+                    // 작성일 기준 내림차순 정렬
+                    data.sort(function(a, b) {
+                        const dateA = a.create_ymd || '';
+                        const dateB = b.create_ymd || '';
+                        return dateB.localeCompare(dateA);
+                    });
+                    
+                    allAnnouncementData = data;
+                    if (announcementsGridApi) {
+                        announcementsGridApi.setGridOption('rowData', data);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('전달사항 데이터 로드 오류:', error);
+                    alert('전달사항을 불러오는 중 오류가 발생했습니다: ' + error.message);
+                });
+        }
+        
+        function openAddModal() {
+            isEditMode = false;
+            editDocumentId = null;
+            isModalOpening = true; // 모달 열기 시작
+            
+            document.getElementById('modalHeaderTitle').textContent = '전달사항 등록';
+            document.getElementById('announcementModal').classList.remove('modal-view-mode');
+            
+            // 폼 초기화
+            document.getElementById('modalNotificationCd').value = '';
+            document.getElementById('modalUserType').value = '';
+            document.getElementById('modalStartYmd').value = '';
+            document.getElementById('modalEndYmd').value = '2999-12-31';
+            document.getElementById('modalCreateYmd').value = formatDateYmdToDash(getCurrentDateYmd());
+            document.getElementById('modalCreateUser').value = currentUserData ? (currentUserData.name || '') : '';
+            document.getElementById('modalAnnouncementTitle').value = '';
+            document.getElementById('modalContents').value = '';
+            document.getElementById('modalFile').value = '';
+            document.getElementById('fileList').innerHTML = '';
+            document.getElementById('existingFiles').innerHTML = '';
+            
+            // 모든 입력 필드 활성화
+            document.getElementById('modalNotificationCd').disabled = false;
+            document.getElementById('modalUserType').disabled = false;
+            document.getElementById('modalStartYmd').disabled = false;
+            document.getElementById('modalEndYmd').disabled = false;
+            document.getElementById('modalAnnouncementTitle').readOnly = false;
+            document.getElementById('modalContents').readOnly = false;
+            document.getElementById('modalFile').disabled = false;
+            
+            // 저장 버튼 표시
+            const saveButton = document.getElementById('saveButton');
+            if (saveButton) {
+                saveButton.style.display = '';
+            }
+            
+            attachmentsToDelete = [];
+            newAttachments = [];
+            selectedFiles = [];
+            
+            // 초기값 저장 (공통코드 관리 방식 참고)
+            startYmdInitialValue = '';
+            endYmdInitialValue = '2999-12-31';
+            
+            document.getElementById('announcementModal').style.display = 'block';
+            document.body.classList.add('modal-open');
+            
+            // 모달 열기 완료 후 검증 활성화
+            setTimeout(function() {
+                isModalOpening = false;
+            }, 500);
+        }
+        
+        function openViewModal(data) {
+            // 읽기 전용 모달 열기 (관리자가 아닌 경우)
+            isEditMode = false;
+            editDocumentId = null;
+            isModalOpening = true;
+            
+            document.getElementById('modalHeaderTitle').textContent = '전달사항 조회';
+            document.getElementById('announcementModal').classList.add('modal-view-mode');
+            
+            // Firestore에서 최신 데이터 가져오기
+            db.collection('bta_notifications').doc(data.id).get().then(function(doc) {
+                if (!doc.exists) {
+                    alert('전달사항을 찾을 수 없습니다.');
+                    isModalOpening = false;
+                    return;
+                }
+                
+                const docData = doc.data();
+                
+                // 폼에 데이터 채우기 (읽기 전용)
+                const startYmdValue = docData.start_ymd && docData.start_ymd.length === 8 ? formatDateYmdToDash(docData.start_ymd) : '';
+                const endYmdValue = docData.end_ymd && docData.end_ymd.length === 8 ? formatDateYmdToDash(docData.end_ymd) : '2999-12-31';
+                
+                document.getElementById('modalNotificationCd').value = docData.notification_cd || '';
+                document.getElementById('modalUserType').value = docData.user_type || '';
+                document.getElementById('modalStartYmd').value = startYmdValue;
+                document.getElementById('modalEndYmd').value = endYmdValue;
+                document.getElementById('modalCreateYmd').value = docData.create_ymd && docData.create_ymd.length === 8 ? formatDateYmdToDash(docData.create_ymd) : '';
+                document.getElementById('modalCreateUser').value = data.create_user_nm || '';
+                document.getElementById('modalAnnouncementTitle').value = docData.title || '';
+                document.getElementById('modalContents').value = docData.contents || '';
+                document.getElementById('modalFile').value = '';
+                document.getElementById('fileList').innerHTML = '';
+                
+                // 모든 입력 필드 읽기 전용으로 설정
+                document.getElementById('modalNotificationCd').disabled = true;
+                document.getElementById('modalUserType').disabled = true;
+                document.getElementById('modalStartYmd').disabled = true;
+                document.getElementById('modalEndYmd').disabled = true;
+                document.getElementById('modalAnnouncementTitle').readOnly = true;
+                document.getElementById('modalContents').readOnly = true;
+                document.getElementById('modalFile').disabled = true;
+                
+                // 저장 버튼 숨기기
+                const saveButton = document.getElementById('saveButton');
+                if (saveButton) {
+                    saveButton.style.display = 'none';
+                }
+                
+                // 기존 첨부파일 표시 (삭제 버튼 없이)
+                const existingFilesDiv = document.getElementById('existingFiles');
+                existingFilesDiv.innerHTML = '';
+                if (docData.attachments && docData.attachments.length > 0) {
+                    const filesList = document.createElement('div');
+                    filesList.style.marginTop = '10px';
+                    docData.attachments.forEach(function(file, index) {
+                        const fileItem = document.createElement('div');
+                        fileItem.style.display = 'flex';
+                        fileItem.style.alignItems = 'center';
+                        fileItem.style.gap = '10px';
+                        fileItem.style.marginBottom = '5px';
+                        fileItem.style.padding = '5px';
+                        fileItem.style.backgroundColor = '#f5f5f5';
+                        fileItem.style.borderRadius = '4px';
+                        
+                        const fileName = document.createElement('span');
+                        fileName.textContent = file.name || '파일';
+                        fileName.style.flex = '1';
+                        
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.textContent = '다운로드';
+                        downloadBtn.className = 'select-btn';
+                        downloadBtn.style.fontSize = '12px';
+                        downloadBtn.onclick = function() {
+                            downloadFile(file.path, file.name);
+                        };
+                        
+                        fileItem.appendChild(fileName);
+                        fileItem.appendChild(downloadBtn);
+                        filesList.appendChild(fileItem);
+                    });
+                    existingFilesDiv.appendChild(filesList);
+                }
+                
+                attachmentsToDelete = [];
+                newAttachments = [];
+                
+                document.getElementById('announcementModal').style.display = 'block';
+                document.body.classList.add('modal-open');
+                
+                // 모달 열기 완료 후 검증 활성화
+                setTimeout(function() {
+                    isModalOpening = false;
+                }, 500);
+            }).catch(function(error) {
+                console.error('전달사항 조회 오류:', error);
+                alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                isModalOpening = false;
+            });
+        }
+        
+        function openEditModal(data) {
+            isEditMode = true;
+            editDocumentId = data.id;
+            isModalOpening = true; // 모달 열기 시작
+            
+            document.getElementById('modalHeaderTitle').textContent = '전달사항 수정';
+            document.getElementById('announcementModal').classList.remove('modal-view-mode');
+            
+            // Firestore에서 최신 데이터 가져오기
+            db.collection('bta_notifications').doc(data.id).get().then(function(doc) {
+                if (!doc.exists) {
+                    alert('전달사항을 찾을 수 없습니다.');
+                    isModalOpening = false;
+                    return;
+                }
+                
+                const docData = doc.data();
+                
+                // 폼에 데이터 채우기
+                const startYmdValue = docData.start_ymd && docData.start_ymd.length === 8 ? formatDateYmdToDash(docData.start_ymd) : '';
+                const endYmdValue = docData.end_ymd && docData.end_ymd.length === 8 ? formatDateYmdToDash(docData.end_ymd) : '2999-12-31';
+                
+                document.getElementById('modalNotificationCd').value = docData.notification_cd || '';
+                document.getElementById('modalUserType').value = docData.user_type || '';
+                document.getElementById('modalStartYmd').value = startYmdValue;
+                document.getElementById('modalEndYmd').value = endYmdValue;
+                document.getElementById('modalCreateYmd').value = docData.create_ymd && docData.create_ymd.length === 8 ? formatDateYmdToDash(docData.create_ymd) : '';
+                document.getElementById('modalCreateUser').value = data.create_user_nm || '';
+                document.getElementById('modalAnnouncementTitle').value = docData.title || '';
+                document.getElementById('modalContents').value = docData.contents || '';
+                document.getElementById('modalFile').value = '';
+                document.getElementById('fileList').innerHTML = '';
+                
+                // 초기값 저장 (공통코드 관리 방식 참고)
+                startYmdInitialValue = startYmdValue;
+                endYmdInitialValue = endYmdValue;
+                
+                // 기존 첨부파일 표시
+                const existingFilesDiv = document.getElementById('existingFiles');
+                existingFilesDiv.innerHTML = '';
+                if (docData.attachments && docData.attachments.length > 0) {
+                    const filesList = document.createElement('div');
+                    filesList.style.marginTop = '10px';
+                    docData.attachments.forEach(function(file, index) {
+                        const fileItem = document.createElement('div');
+                        fileItem.style.display = 'flex';
+                        fileItem.style.alignItems = 'center';
+                        fileItem.style.gap = '10px';
+                        fileItem.style.marginBottom = '5px';
+                        fileItem.style.padding = '5px';
+                        fileItem.style.backgroundColor = '#f5f5f5';
+                        fileItem.style.borderRadius = '4px';
+                        
+                        const fileName = document.createElement('span');
+                        fileName.textContent = file.name || '파일';
+                        fileName.style.flex = '1';
+                        
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.textContent = '다운로드';
+                        downloadBtn.className = 'select-btn';
+                        downloadBtn.style.fontSize = '12px';
+                        downloadBtn.onclick = function() {
+                            downloadFile(file.path, file.name);
+                        };
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = '삭제';
+                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.style.fontSize = '12px';
+                        deleteBtn.onclick = function() {
+                            if (confirm('첨부파일을 삭제하시겠습니까?')) {
+                                attachmentsToDelete.push(file.path);
+                                fileItem.remove();
+                            }
+                        };
+                        
+                        fileItem.appendChild(fileName);
+                        fileItem.appendChild(downloadBtn);
+                        fileItem.appendChild(deleteBtn);
+                        filesList.appendChild(fileItem);
+                    });
+                    existingFilesDiv.appendChild(filesList);
+                }
+                
+                attachmentsToDelete = [];
+                newAttachments = [];
+                selectedFiles = [];
+                
+                document.getElementById('announcementModal').style.display = 'block';
+                document.body.classList.add('modal-open');
+                
+                // 모달 열기 완료 후 검증 활성화
+                setTimeout(function() {
+                    isModalOpening = false;
+                }, 500);
+            }).catch(function(error) {
+                console.error('전달사항 조회 오류:', error);
+                alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                isModalOpening = false;
+            });
+        }
+        
+        function closeModal() {
+            document.getElementById('announcementModal').style.display = 'none';
+            document.getElementById('announcementModal').classList.remove('modal-view-mode');
+            document.body.classList.remove('modal-open');
+            isEditMode = false;
+            editDocumentId = null;
+            attachmentsToDelete = [];
+            newAttachments = [];
+            
+            // 모든 입력 필드 초기화 및 활성화
+            document.getElementById('modalNotificationCd').disabled = false;
+            document.getElementById('modalUserType').disabled = false;
+            document.getElementById('modalStartYmd').disabled = false;
+            document.getElementById('modalEndYmd').disabled = false;
+            document.getElementById('modalAnnouncementTitle').readOnly = false;
+            document.getElementById('modalContents').readOnly = false;
+            document.getElementById('modalFile').disabled = false;
+            
+            // 저장 버튼 표시
+            const saveButton = document.getElementById('saveButton');
+            if (saveButton) {
+                saveButton.style.display = '';
+            }
+        }
+        
+        function downloadFile(filePath, fileName) {
+            const storageRef = storage.ref(filePath);
+            storageRef.getDownloadURL().then(function(url) {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                link.click();
+            }).catch(function(error) {
+                console.error('파일 다운로드 오류:', error);
+                alert('파일 다운로드 중 오류가 발생했습니다.');
+            });
+        }
+        
+        function saveAnnouncement() {
+            const notificationCd = document.getElementById('modalNotificationCd').value;
+            const userType = document.getElementById('modalUserType').value;
+            const startYmdInput = document.getElementById('modalStartYmd').value;
+            const endYmdInput = document.getElementById('modalEndYmd').value;
+            const createYmd = formatDateDashToYmd(document.getElementById('modalCreateYmd').value);
+            const title = document.getElementById('modalAnnouncementTitle').value.trim();
+            const contents = document.getElementById('modalContents').value.trim();
+            const fileInput = document.getElementById('modalFile');
+            
+            // 필수 필드 검증
+            if (!notificationCd) {
+                alert('구분을 선택하세요.');
+                return;
+            }
+            if (!userType) {
+                alert('대상을 선택하세요.');
+                return;
+            }
+            if (!startYmdInput) {
+                alert('개시일을 입력하세요.');
+                return;
+            }
+            if (!endYmdInput) {
+                alert('종료일을 입력하세요.');
+                return;
+            }
+            
+            // 날짜 검증 (년도 4자리 + 개시일 <= 종료일)
+            if (!validateDateRange()) {
+                return; // 검증 실패 시 저장 중단
+            }
+            
+            const startYmd = formatDateDashToYmd(startYmdInput);
+            const endYmd = formatDateDashToYmd(endYmdInput);
+            
+            if (!title) {
+                alert('제목을 입력하세요.');
+                return;
+            }
+            if (!contents) {
+                alert('내용을 입력하세요.');
+                return;
+            }
+            
+            const currentDate = getCurrentDateYmd();
+            const currentTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+            const currentUserId = currentUser ? currentUser.uid : '';
+            
+            // 첨부파일 업로드
+            const uploadPromises = [];
+            if (fileInput.files && fileInput.files.length > 0) {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const file = fileInput.files[i];
+                    const fileName = file.name;
+                    const filePath = 'announcements/' + currentUserId + '/' + Date.now() + '_' + fileName;
+                    const storageRef = storage.ref(filePath);
+                    
+                    uploadPromises.push(
+                        storageRef.put(file).then(function(snapshot) {
+                            return {
+                                name: fileName,
+                                path: filePath,
+                                size: file.size
+                            };
+                        })
+                    );
+                }
+            }
+            
+            Promise.all(uploadPromises).then(function(uploadedFiles) {
+                // 기존 첨부파일에서 삭제할 파일 제외
+                if (isEditMode && editDocumentId) {
+                    db.collection('bta_notifications').doc(editDocumentId).get().then(function(doc) {
+                        if (!doc.exists) {
+                            alert('전달사항을 찾을 수 없습니다.');
+                            return;
+                        }
+                        
+                        let existingAttachments = doc.data().attachments || [];
+                        existingAttachments = existingAttachments.filter(function(file) {
+                            return attachmentsToDelete.indexOf(file.path) === -1;
+                        });
+                        
+                        const allAttachments = existingAttachments.concat(uploadedFiles);
+                        
+                        // 기존 첨부파일 삭제
+                        const deletePromises = attachmentsToDelete.map(function(filePath) {
+                            return storage.ref(filePath).delete().catch(function(error) {
+                                console.error('파일 삭제 오류:', error);
+                            });
+                        });
+                        
+                        Promise.all(deletePromises).then(function() {
+                            const announcementData = {
+                                notification_cd: notificationCd,
+                                user_type: userType,
+                                title: title,
+                                contents: contents,
+                                start_ymd: startYmd,
+                                end_ymd: endYmd,
+                                attachments: allAttachments,
+                                update_user: currentUserData ? currentUserData.name : '',
+                                update_date: currentTimestamp
+                            };
+                            
+                            // 수정
+                            db.collection('bta_notifications').doc(editDocumentId).update(announcementData)
+                                .then(function() {
+                                    alert('수정되었습니다.');
+                                    closeModal();
+                                    loadAnnouncementData('', '', '');
+                                })
+                                .catch(function(error) {
+                                    console.error('수정 오류:', error);
+                                    alert('수정 중 오류가 발생했습니다: ' + error.message);
+                                });
+                        });
+                    }).catch(function(error) {
+                        console.error('전달사항 조회 오류:', error);
+                        alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                    });
+                } else {
+                    // 등록
+                    const allAttachments = uploadedFiles;
+                    const announcementData = {
+                        notification_cd: notificationCd,
+                        user_type: userType,
+                        title: title,
+                        contents: contents,
+                        start_ymd: startYmd,
+                        end_ymd: endYmd,
+                        create_ymd: createYmd || currentDate,
+                        create_user: currentUser ? currentUser.uid : '',
+                        attachments: allAttachments,
+                        update_user: currentUserData ? currentUserData.name : '',
+                        update_date: currentTimestamp
+                    };
+                    
+                    db.collection('bta_notifications').add(announcementData)
+                        .then(function() {
+                            alert('등록되었습니다.');
+                            closeModal();
+                            loadAnnouncementData('', '', '');
+                        })
+                        .catch(function(error) {
+                            console.error('등록 오류:', error);
+                            alert('등록 중 오류가 발생했습니다: ' + error.message);
+                        });
+                }
+            }).catch(function(error) {
+                console.error('파일 업로드 오류:', error);
+                alert('파일 업로드 중 오류가 발생했습니다: ' + error.message);
+            });
+        }
+        
+        function deleteAnnouncement(data) {
+            if (!confirm('정말 삭제하시겠습니까?')) {
+                return;
+            }
+            
+            // 첨부파일 삭제
+            if (data.attachments && data.attachments.length > 0) {
+                const deletePromises = data.attachments.map(function(file) {
+                    return storage.ref(file.path).delete().catch(function(error) {
+                        console.error('파일 삭제 오류:', error);
+                    });
+                });
+                
+                Promise.all(deletePromises).then(function() {
+                    db.collection('bta_notifications').doc(data.id).delete()
+                        .then(function() {
+                            alert('삭제되었습니다.');
+                            loadAnnouncementData('', '', '');
+                        })
+                        .catch(function(error) {
+                            console.error('삭제 오류:', error);
+                            alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                        });
+                });
+            } else {
+                db.collection('bta_notifications').doc(data.id).delete()
+                    .then(function() {
+                        alert('삭제되었습니다.');
+                        loadAnnouncementData('', '', '');
+                    })
+                    .catch(function(error) {
+                        console.error('삭제 오류:', error);
+                        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                    });
+            }
+        }
+        
+        function exportToExcel() {
+            if (allAnnouncementData.length === 0) {
+                alert('다운로드할 데이터가 없습니다.');
+                return;
+            }
+            
+            const exportData = allAnnouncementData.map(function(item) {
+                return {
+                    '구분': item.notification_cd_nm || '',
+                    '대상': item.user_type_nm || '',
+                    '제목': item.title || '',
+                    '개시일': item.start_ymd_display || '',
+                    '작성일': item.create_ymd_display || '',
+                    '작성자': item.create_user_nm || ''
+                };
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '전달사항');
+            
+            const fileName = '전달사항_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            XLSX.writeFile(wb, fileName);
+        }
+        
+        // 이벤트 리스너
+        document.addEventListener('DOMContentLoaded', function() {
+            // 관리자가 아닌 경우 버튼 숨기기
+            if (!isAdmin) {
+                const actionButtonsContainer = document.getElementById('actionButtonsContainer');
+                if (actionButtonsContainer) {
+                    actionButtonsContainer.style.display = 'none';
+                }
+                
+                // 대상 필드 숨기기
+                const searchUserTypeField = document.getElementById('searchUserTypeField');
+                if (searchUserTypeField) {
+                    searchUserTypeField.style.display = 'none';
+                }
+                
+                // 제목 입력 필드 넓이 확대
+                const searchTitleInput = document.getElementById('searchTitle');
+                if (searchTitleInput) {
+                    searchTitleInput.classList.add('search-title-wide');
+                }
+            }
+            
+            const searchButton = document.getElementById('searchButton');
+            const addButton = document.getElementById('addButton');
+            const saveButton = document.getElementById('saveButton');
+            const cancelButton = document.getElementById('cancelButton');
+            const exportExcelButton = document.getElementById('exportExcelButton');
+            const closeButton = document.querySelector('#announcementModal .close-button');
+            
+            if (searchButton) {
+                searchButton.addEventListener('click', function() {
+                    const searchNotificationCd = document.getElementById('searchNotificationCd').value;
+                    const searchUserType = document.getElementById('searchUserType').value;
+                    const searchTitle = document.getElementById('searchTitle').value.trim();
+                    loadAnnouncementData(searchNotificationCd, searchUserType, searchTitle);
+                });
+            }
+            
+            if (addButton && isAdmin) {
+                addButton.addEventListener('click', openAddModal);
+            }
+            
+            if (saveButton && isAdmin) {
+                saveButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    saveAnnouncement();
+                });
+            }
+            
+            if (cancelButton) {
+                cancelButton.addEventListener('click', closeModal);
+            }
+            
+            if (exportExcelButton && isAdmin) {
+                exportExcelButton.addEventListener('click', exportToExcel);
+            }
+            
+            if (closeButton) {
+                closeButton.addEventListener('click', closeModal);
+            }
+            
+            // 개시일과 종료일 실시간 검증 (공통코드 관리 방식 참고)
+            setupDateValidation();
+        });
+        
+        let isModalOpening = false; // 모달이 열리는 중인지 확인
+        let startYmdInitialValue = ''; // 개시일 초기값
+        let endYmdInitialValue = ''; // 종료일 초기값
+        
+        let isValidating = false; // 검증 중 플래그 (무한 루프 방지)
+        
+        function setupDateValidation() {
+            // blur 이벤트는 제거하고 저장 버튼 클릭 시에만 검증
+        }
+        
+        function validateDateRange() {
+            const startYmdInput = document.getElementById('modalStartYmd');
+            const endYmdInput = document.getElementById('modalEndYmd');
+            
+            if (!startYmdInput.value || !endYmdInput.value) {
+                return true; // 둘 다 입력되지 않았으면 검증하지 않음 (통과)
+            }
+            
+            // 년도 4자리 검증
+            const startYear = startYmdInput.value.substring(0, 4);
+            const endYear = endYmdInput.value.substring(0, 4);
+            if (startYear.length !== 4 || isNaN(startYear) || parseInt(startYear) < 1000 || parseInt(startYear) > 9999) {
+                alert('개시일의 년도는 4자리 숫자여야 합니다.');
+                startYmdInput.focus();
+                return false;
+            }
+            if (endYear.length !== 4 || isNaN(endYear) || parseInt(endYear) < 1000 || parseInt(endYear) > 9999) {
+                alert('종료일의 년도는 4자리 숫자여야 합니다.');
+                endYmdInput.focus();
+                return false;
+            }
+            
+            // 개시일 <= 종료일 비교
+            const startDate = new Date(startYmdInput.value);
+            const endDate = new Date(endYmdInput.value);
+            
+            if (startDate > endDate) {
+                alert('개시일은 종료일보다 작거나 같아야 합니다.');
+                startYmdInput.focus();
+                return false;
+            }
+            
+            return true; // 검증 통과
+        }
+        
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('announcementModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        
+        // 파일 선택 시 미리보기
+        document.getElementById('modalFile').addEventListener('change', function(e) {
+            const fileList = document.getElementById('fileList');
+            
+            if (e.target.files && e.target.files.length > 0) {
+                // 기존 파일 목록의 개수 확인
+                const existingItems = fileList.querySelectorAll('div[data-file-index]');
+                const startIndex = existingItems.length;
+                
+                // 새로 선택한 파일들을 기존 목록에 추가
+                Array.from(e.target.files).forEach(function(file, index) {
+                    // 중복 파일 체크 (같은 이름의 파일이 이미 있는지 확인)
+                    const isDuplicate = selectedFiles.some(function(existingFile) {
+                        return existingFile.name === file.name && existingFile.size === file.size;
+                    });
+                    
+                    if (isDuplicate) {
+                        alert('이미 추가된 파일입니다: ' + file.name);
+                        return;
+                    }
+                    
+                    selectedFiles.push(file);
+                    
+                    const fileItem = document.createElement('div');
+                    fileItem.style.display = 'flex';
+                    fileItem.style.alignItems = 'center';
+                    fileItem.style.gap = '10px';
+                    fileItem.style.marginBottom = '5px';
+                    fileItem.style.padding = '5px';
+                    fileItem.style.backgroundColor = '#e3f2fd';
+                    fileItem.style.borderRadius = '4px';
+                    fileItem.setAttribute('data-file-index', startIndex + index);
+                    
+                    const fileName = document.createElement('span');
+                    fileName.textContent = file.name + ' (' + (file.size / 1024).toFixed(2) + ' KB)';
+                    fileName.style.flex = '1';
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = '삭제';
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.style.fontSize = '12px';
+                    deleteBtn.onclick = function() {
+                        if (confirm('첨부파일을 삭제하시겠습니까?')) {
+                            const fileIndex = parseInt(fileItem.getAttribute('data-file-index'));
+                            selectedFiles.splice(fileIndex, 1);
+                            fileItem.remove();
+                            
+                            // 파일 입력 필드 업데이트
+                            const dataTransfer = new DataTransfer();
+                            selectedFiles.forEach(function(file) {
+                                dataTransfer.items.add(file);
+                            });
+                            document.getElementById('modalFile').files = dataTransfer.files;
+                            
+                            // 인덱스 재설정
+                            const remainingItems = fileList.querySelectorAll('div[data-file-index]');
+                            remainingItems.forEach(function(item, idx) {
+                                item.setAttribute('data-file-index', idx);
+                            });
+                        }
+                    };
+                    
+                    fileItem.appendChild(fileName);
+                    fileItem.appendChild(deleteBtn);
+                    fileList.appendChild(fileItem);
+                });
+                
+                // 파일 입력 필드 업데이트 (기존 파일 + 새 파일)
+                const dataTransfer = new DataTransfer();
+                selectedFiles.forEach(function(file) {
+                    dataTransfer.items.add(file);
+                });
+                document.getElementById('modalFile').files = dataTransfer.files;
+            }
+        });
+        
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                currentUser = user;
+                
+                // 현재 사용자 정보 가져오기
+                db.collection('bta_users').doc(user.uid).get().then(function(doc) {
+                    if (doc.exists) {
+                        currentUserData = doc.data();
+                    }
+                    
+                    loadLookupLists();
+                    initAnnouncementsGrid();
+                    loadAnnouncementData('', '', '');
+                }).catch(function(error) {
+                    console.error('사용자 정보 가져오기 오류:', error);
+                    loadLookupLists();
+                    initAnnouncementsGrid();
+                    loadAnnouncementData('', '', '');
+                });
+            } else {
+                window.location.href = '/login';
+            }
+        });
+    </script>
+</body>
+</html>

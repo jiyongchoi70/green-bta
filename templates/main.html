@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTA 홈페이지</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script src="{{ url_for('static', filename='menu-config.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header-section">
+            <h1 class="page-title">BTA 홈페이지</h1>
+            <div class="user-section">
+                <button id="logoutButton" class="logout-button">로그아웃</button>
+                <span id="userEmail" class="user-email"></span>
+            </div>
+        </div>
+        
+        <div class="main-table" id="menuTable">
+            <!-- 동적으로 생성됨 -->
+        </div>
+    </div>
+    
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+            console.log('Firebase 초기화 완료');
+        }
+        
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        // 권한별 URL 가져오기
+        function getMenuUrl(menu, userType) {
+            if (menu.links && menu.links[userType]) {
+                return menu.links[userType];
+            }
+            if (menu.link) {
+                return menu.link;
+            }
+            return '#';
+        }
+        
+        // 메뉴 렌더링 함수
+        function renderMenu(userType) {
+            const menuTable = document.getElementById('menuTable');
+            if (!menuTable) {
+                console.error('메뉴 테이블을 찾을 수 없습니다.');
+                return;
+            }
+            
+            // 기존 내용 제거
+            menuTable.innerHTML = '';
+            
+            // 컬럼 순서 정의
+            const columnOrder = ['코치방', '학생방', '학부모방', '관리자'];
+            
+            // 헤더 행 생성
+            const headerRow = document.createElement('div');
+            headerRow.className = 'table-row header-row';
+            
+            columnOrder.forEach(function(columnName) {
+                const column = MENU_CONFIG.columns[columnName];
+                const userTypeStr = String(userType);
+                if (column && column.userTypes.includes(userTypeStr)) {
+                    const headerCell = document.createElement('div');
+                    headerCell.className = 'table-cell header-cell';
+                    headerCell.textContent = columnName;
+                    headerRow.appendChild(headerCell);
+                }
+            });
+            
+            menuTable.appendChild(headerRow);
+            
+            // 메뉴를 행 단위로 그룹화 (rowIndex 기준)
+            const menuRows = {};
+            
+            MENU_CONFIG.menus.forEach(function(menu) {
+                // userType을 문자열로 변환하여 비교
+                const userTypeStr = String(userType);
+                if (!menu.userTypes.includes(userTypeStr)) {
+                    return; // 권한이 없으면 건너뛰기
+                }
+                
+                const column = MENU_CONFIG.columns[menu.column];
+                if (!column || !column.userTypes.includes(userTypeStr)) {
+                    return; // 컬럼이 표시되지 않으면 건너뛰기
+                }
+                
+                const rowIndex = menu.rowIndex !== undefined ? menu.rowIndex : 0;
+                
+                if (!menuRows[rowIndex]) {
+                    menuRows[rowIndex] = {};
+                }
+                
+                menuRows[rowIndex][menu.column] = menu;
+            });
+            
+            // 최대 행 수 계산
+            const maxRowIndex = Math.max(...Object.keys(menuRows).map(Number), -1);
+            
+            // 행 생성
+            for (let rowIndex = 0; rowIndex <= maxRowIndex; rowIndex++) {
+                const tableRow = document.createElement('div');
+                tableRow.className = 'table-row';
+                
+                let hasContent = false;
+                
+                columnOrder.forEach(function(columnName) {
+                    const column = MENU_CONFIG.columns[columnName];
+                    const userTypeStr = String(userType);
+                    if (!column || !column.userTypes.includes(userTypeStr)) {
+                        return; // 컬럼이 표시되지 않으면 건너뛰기
+                    }
+                    
+                    const tableCell = document.createElement('div');
+                    tableCell.className = 'table-cell';
+                    
+                    if (menuRows[rowIndex] && menuRows[rowIndex][columnName]) {
+                        const menuItem = menuRows[rowIndex][columnName];
+                        const url = getMenuUrl(menuItem, userType);
+                        
+                        const menuLink = document.createElement('a');
+                        menuLink.href = url;
+                        menuLink.className = 'menu-link';
+                        menuLink.textContent = menuItem.label;
+                        
+                        tableCell.appendChild(menuLink);
+                        hasContent = true;
+                    }
+                    
+                    tableRow.appendChild(tableCell);
+                });
+                
+                // 내용이 있는 행만 추가
+                if (hasContent) {
+                    menuTable.appendChild(tableRow);
+                }
+            }
+        }
+        
+        auth.onAuthStateChanged(function(user) {
+            if (!user && window.location.pathname === '/') {
+                window.location.href = '/login';
+            } else if (user) {
+                const userEmailElement = document.getElementById('userEmail');
+                if (userEmailElement) {
+                    db.collection('bta_users').doc(user.uid).get().then(function(doc) {
+                        if (doc.exists) {
+                            const userData = doc.data();
+                            userEmailElement.textContent = userData.name || user.email;
+                            
+                            // user_type 확인 후 메뉴 렌더링
+                            // user_type을 문자열로 변환 (숫자로 저장되어 있을 수 있음)
+                            const userType = String(userData.user_type || '');
+                            if (userType) {
+                                renderMenu(userType);
+                            } else {
+                                console.error('user_type을 찾을 수 없습니다. userData:', userData);
+                                // 메뉴를 렌더링하지 않음 (에러 표시)
+                            }
+                        } else {
+                            userEmailElement.textContent = user.email;
+                            console.error('사용자 데이터를 찾을 수 없습니다.');
+                        }
+                    }).catch(function(error) {
+                        console.error('사용자 정보 가져오기 오류:', error);
+                        userEmailElement.textContent = user.email;
+                    });
+                }
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoutButton = document.getElementById('logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', function() {
+                    auth.signOut().then(function() {
+                        window.location.href = '/login';
+                    }).catch(function(error) {
+                        console.error('로그아웃 오류:', error);
+                        alert('로그아웃 중 오류가 발생했습니다: ' + error.message);
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
