@@ -598,14 +598,36 @@
                     return Promise.resolve();
                 }
                 
-                const savePromises = validUsers.map(function(r) {
-                    const saveData = {};
-                    saveData[userSearchModalConfig.idFieldName] = selectedId;
-                    saveData['userid'] = r.userId;
-                    return userSearchModalConfig.db.collection(userSearchModalConfig.collectionName).add(saveData);
-                });
-                
-                return Promise.all(savePromises);
+                // bta_class_students 컬렉션이고 class_id인 경우, bta_class에서 semester_cd, class_cd 조회
+                if (userSearchModalConfig.collectionName === 'bta_class_students' && userSearchModalConfig.idFieldName === 'class_id') {
+                    return userSearchModalConfig.db.collection('bta_class').doc(selectedId).get()
+                        .then(function(classDoc) {
+                            var semesterCd = '';
+                            var classCd = '';
+                            if (classDoc.exists) {
+                                var d = classDoc.data();
+                                semesterCd = (d.semester_cd || '').toString().trim();
+                                classCd = (d.class_cd || '').toString().trim();
+                            }
+                            var savePromises = validUsers.map(function(r) {
+                                var saveData = {};
+                                saveData[userSearchModalConfig.idFieldName] = selectedId;
+                                saveData['userid'] = r.userId;
+                                saveData['semester_cd'] = semesterCd;
+                                saveData['class_cd'] = classCd;
+                                return userSearchModalConfig.db.collection(userSearchModalConfig.collectionName).add(saveData);
+                            });
+                            return Promise.all(savePromises);
+                        });
+                } else {
+                    var savePromises = validUsers.map(function(r) {
+                        var saveData = {};
+                        saveData[userSearchModalConfig.idFieldName] = selectedId;
+                        saveData['userid'] = r.userId;
+                        return userSearchModalConfig.db.collection(userSearchModalConfig.collectionName).add(saveData);
+                    });
+                    return Promise.all(savePromises);
+                }
             })
             .then(function() {
                 if (selectedRows.length > 0) {

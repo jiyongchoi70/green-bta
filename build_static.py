@@ -57,7 +57,10 @@ if __name__ == '__main__':
             'permission': '권한관리',
             'assignment-list': '과제목록',
             'common-code': '공통코드',
-            'parent-registration': '학부모 등록'
+            'parent-registration': '학부모 등록',
+            'organization': '조직도',
+            'user-assignment': '발령',
+            'organization-chart': '조직도조회'
         }
         
         for room_type in room_types:
@@ -77,6 +80,20 @@ if __name__ == '__main__':
                     template_name = 'class_assignment.html'
                 elif menu_item == 'parent-registration' and room_type == 'system':
                     template_name = 'parent_registration.html'
+                elif menu_item == 'assignment-list' and room_type == 'system':
+                    template_name = 'task_list.html'
+                elif menu_item == 'organization' and room_type == 'system':
+                    template_name = 'organization.html'
+                elif menu_item == 'user-assignment' and room_type == 'system':
+                    template_name = 'user_assignment.html'
+                elif menu_item == 'organization-chart' and room_type == 'system':
+                    template_name = 'organization_chart.html'
+                elif menu_item == 'student-select' and room_type == 'coach':
+                    template_name = 'coach_assignment_submit.html'
+                elif menu_item == 'assignment-submit' and room_type == 'student':
+                    template_name = 'student_assignment_submit.html'
+                elif menu_item == 'assignment-submit' and room_type == 'parent':
+                    template_name = 'parent_assignment_submit.html'
                 else:
                     template_name = 'menu_page.html'
                 routes.append((f'/menu/{room_type}/{menu_item}', template_name, {

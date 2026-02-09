@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조직도 조회 - BTA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='organization_chart.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">조직도 조회</h1>
+            <div class="header-actions">
+                <button id="printChartButton" class="action-button">🖨️ 인쇄</button>
+                <button id="exportPdfButton" class="action-button">📄 PDF</button>
+                <a href="/" class="home-button">홈</a>
+            </div>
+        </div>
+        
+        <div id="orgChartContainer" class="org-chart-container">
+            <!-- 조직도가 여기에 동적으로 생성됩니다 -->
+        </div>
+    </div>
+    
+    <script>
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        let allOrganizations = [];
+        let allAssignments = [];
+        let currentUser = null;
+        
+        // 인증 상태 확인
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                // 로그인됨
+                currentUser = user;
+                console.log('로그인된 사용자:', user.email);
+                loadOrganizations();
+            } else {
+                // 로그인 안 됨
+                console.log('로그인되지 않음');
+                const container = document.getElementById('orgChartContainer');
+                container.innerHTML = `<div class="empty-state">
+                    <div class="empty-state-icon">🔒</div>
+                    <div class="empty-state-text">로그인이 필요합니다.</div>
+                    <div class="empty-state-text" style="font-size: 14px; color: #999;">
+                        <a href="/" style="color: #2563eb;">로그인 페이지로 이동</a>
+                    </div>
+                </div>`;
+            }
+        });
+        
+        // 조직 데이터 로드
+        function loadOrganizations() {
+            // 로딩 표시
+            const container = document.getElementById('orgChartContainer');
+            container.innerHTML = '<div class="loading">조직도를 불러오는 중...</div>';
+            
+            db.collection('bta_organization')
+                .get()
+                .then(function(querySnapshot) {
+                    allOrganizations = [];
+                    querySnapshot.forEach(function(doc) {
+                        allOrganizations.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    
+                    console.log('로드된 조직 수:', allOrganizations.length);
+                    
+                    // 레벨과 순서로 정렬
+                    allOrganizations.sort((a, b) => {
+                        if ((a.level || 0) !== (b.level || 0)) {
+                            return (a.level || 0) - (b.level || 0);
+                        }
+                        return (a.sort_order || 0) - (b.sort_order || 0);
+                    });
+                    
+                    // 발령 데이터 로드
+                    loadAssignments();
+                })
+                .catch(function(error) {
+                    console.error('조직 로드 오류:', error);
+                    container.innerHTML = `<div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-text">조직 데이터를 불러오는 중 오류가 발생했습니다.</div>
+                        <div class="empty-state-text" style="font-size: 14px; color: #999;">${error.message}</div>
+                    </div>`;
+                });
+        }
+        
+        // 발령 데이터 로드
+        function loadAssignments() {
+            const today = getCurrentDateYmd();
+            
+            db.collection('bta_user_assignment')
+                .where('start_ymd', '<=', today)
+                .get()
+                .then(function(querySnapshot) {
+                    allAssignments = [];
+                    querySnapshot.forEach(function(doc) {
+                        const data = doc.data();
+                        // 종료일이 없거나 오늘 이후인 경우만
+                        if (!data.end_ymd || data.end_ymd >= today) {
+                            allAssignments.push({
+                                id: doc.id,
+                                ...data
+                            });
+                        }
+                    });
+                    
+                    // 조직도 렌더링
+                    renderOrganizationChart();
+                })
+                .catch(function(error) {
+                    console.error('발령 로드 오류:', error);
+                    renderOrganizationChart();
+                });
+        }
+        
+        // 현재 날짜 YYYYMMDD 형식으로 반환
+        function getCurrentDateYmd() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+        
+        // 조직도 렌더링
+        function renderOrganizationChart() {
+            const container = document.getElementById('orgChartContainer');
+            container.innerHTML = '';
+            
+            console.log('렌더링 시작, 전체 조직 수:', allOrganizations.length);
+            
+            // 데이터가 없는 경우
+            if (allOrganizations.length === 0) {
+                container.innerHTML = `<div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <div class="empty-state-text">등록된 조직이 없습니다.</div>
+                    <div class="empty-state-text" style="font-size: 14px; color: #999;">조직도 관리 메뉴에서 조직을 등록해주세요.</div>
+                </div>`;
+                return;
+            }
+            
+            // 최상위 조직 찾기
+            const rootOrgs = allOrganizations.filter(org => !org.parent_id || org.parent_id === '');
+            
+            console.log('최상위 조직 수:', rootOrgs.length);
+            
+            if (rootOrgs.length === 0) {
+                container.innerHTML = `<div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">최상위 조직을 찾을 수 없습니다.</div>
+                </div>`;
+                return;
+            }
+            
+            rootOrgs.forEach(rootOrg => {
+                const orgTree = createOrgTree(rootOrg);
+                container.appendChild(orgTree);
+            });
+        }
+        
+        // 조직 트리 생성 (재귀)
+        function createOrgTree(org) {
+            const orgElement = document.createElement('div');
+            orgElement.className = 'org-tree';
+            
+            // 조직 카드 생성
+            const orgCard = createOrgCard(org);
+            orgElement.appendChild(orgCard);
+            
+            // 하위 조직 찾기
+            const children = allOrganizations.filter(o => o.parent_id === org.id);
+            
+            if (children.length > 0) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'org-children';
+                
+                // 연결선 추가
+                if (children.length > 0) {
+                    const connector = document.createElement('div');
+                    connector.className = 'org-connector';
+                    childrenContainer.appendChild(connector);
+                }
+                
+                const childrenWrapper = document.createElement('div');
+                childrenWrapper.className = 'org-children-wrapper';
+                
+                children.forEach((child, index) => {
+                    const childTree = createOrgTree(child);
+                    childrenWrapper.appendChild(childTree);
+                });
+                
+                childrenContainer.appendChild(childrenWrapper);
+                orgElement.appendChild(childrenContainer);
+            }
+            
+            return orgElement;
+        }
+        
+        // 조직 카드 생성
+        function createOrgCard(org) {
+            const card = document.createElement('div');
+            card.className = `org-card org-level-${org.level || 0}`;
+            
+            // 조직 정보
+            const orgInfo = document.createElement('div');
+            orgInfo.className = 'org-info';
+            
+            const orgName = document.createElement('div');
+            orgName.className = 'org-card-name';
+            orgName.textContent = org.name;
+            orgInfo.appendChild(orgName);
+            
+            if (org.type_nm) {
+                const orgType = document.createElement('div');
+                orgType.className = 'org-card-type';
+                orgType.textContent = org.type_nm;
+                orgInfo.appendChild(orgType);
+            }
+            
+            card.appendChild(orgInfo);
+            
+            // 소속 인원
+            const members = allAssignments.filter(a => a.org_id === org.id);
+            if (members.length > 0) {
+                const membersContainer = document.createElement('div');
+                membersContainer.className = 'org-members';
+                
+                members.forEach(member => {
+                    const memberCard = document.createElement('div');
+                    memberCard.className = 'member-card';
+                    
+                    // 프로필 이미지 (기본 아바타)
+                    const avatar = document.createElement('div');
+                    avatar.className = 'member-avatar';
+                    avatar.textContent = member.user_name ? member.user_name.charAt(0) : '?';
+                    memberCard.appendChild(avatar);
+                    
+                    // 이름
+                    const memberInfo = document.createElement('div');
+                    memberInfo.className = 'member-info';
+                    
+                    const memberName = document.createElement('div');
+                    memberName.className = 'member-name';
+                    memberName.textContent = member.user_name || '이름없음';
+                    memberInfo.appendChild(memberName);
+                    
+                    // 직책
+                    if (member.position_nm) {
+                        const memberPosition = document.createElement('div');
+                        memberPosition.className = 'member-position';
+                        memberPosition.textContent = member.position_nm;
+                        memberInfo.appendChild(memberPosition);
+                    }
+                    
+                    memberCard.appendChild(memberInfo);
+                    membersContainer.appendChild(memberCard);
+                });
+                
+                card.appendChild(membersContainer);
+            }
+            
+            return card;
+        }
+        
+        // 인쇄 기능
+        function printChart() {
+            window.print();
+        }
+        
+        // PDF 내보내기
+        function exportToPdf() {
+            const chartContainer = document.getElementById('orgChartContainer');
+            
+            // html2canvas로 이미지 생성
+            html2canvas(chartContainer, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: chartContainer.scrollWidth,
+                height: chartContainer.scrollHeight
+            }).then(function(canvas) {
+                const { jsPDF } = window.jspdf;
+                
+                // 캔버스 크기에 따라 PDF 크기 결정
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                
+                // A4 크기 계산 (가로 방향)
+                const pdfWidth = 297; // A4 landscape width (mm)
+                const pdfHeight = 210; // A4 landscape height (mm)
+                
+                // 이미지 비율 계산
+                const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                const scaledWidth = imgWidth * ratio;
+                const scaledHeight = imgHeight * ratio;
+                
+                // 여러 페이지가 필요한 경우
+                const pdf = new jsPDF('l', 'mm', 'a4');
+                let heightLeft = scaledHeight;
+                let position = 0;
+                
+                const imgData = canvas.toDataURL('image/png');
+                
+                pdf.addImage(imgData, 'PNG', 10, 10, scaledWidth - 20, scaledHeight - 20);
+                heightLeft -= pdfHeight;
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - scaledHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position + 10, scaledWidth - 20, scaledHeight - 20);
+                    heightLeft -= pdfHeight;
+                }
+                
+                const fileName = `조직도조회_${new Date().toISOString().split('T')[0]}.pdf`;
+                pdf.save(fileName);
+                
+                alert('PDF 파일이 다운로드되었습니다.');
+            }).catch(function(error) {
+                console.error('PDF 생성 오류:', error);
+                alert('PDF 생성 중 오류가 발생했습니다.');
+            });
+        }
+        
+        // 이벤트 리스너
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('printChartButton').addEventListener('click', printChart);
+            document.getElementById('exportPdfButton').addEventListener('click', exportToPdf);
+            
+            // onAuthStateChanged에서 자동으로 loadOrganizations() 호출됨
+        });
+    </script>
+</body>
+</html>

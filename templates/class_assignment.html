@@ -202,6 +202,8 @@
         const db = firebase.firestore();
         
         let selectedClassId = null;
+        let selectedClassSemesterCd = '';
+        let selectedClassClassCd = '';
         let semesterList = [];
         let classNameList = [];
         let studentStatusList = [];
@@ -359,6 +361,8 @@
             onRowClicked: function(event) {
                 if (event.data) {
                     selectedClassId = event.data.class_id;
+                    selectedClassSemesterCd = event.data.semester_cd || '';
+                    selectedClassClassCd = event.data.class_cd || '';
                     loadStudentData(selectedClassId);
                 }
             }
@@ -377,8 +381,6 @@
         const studentGridApi = agGrid.createGrid(document.querySelector('#studentGrid'), studentGridOptions);
         
         function loadClassData() {
-            const currentDate = getCurrentDateYmd();
-            
             db.collection('bta_class').get()
                 .then(function(querySnapshot) {
                     const promises = [];
@@ -388,12 +390,13 @@
                         const docData = doc.data();
                         const semesterCd = docData.semester_cd || '';
                         const classCd = docData.class_cd || '';
+                        const createYmd = docData.create_ymd || getCurrentDateYmd();
                         
                         const classPromise = Promise.all([
-                            semesterCd ? getLookupValueName(db, '140', semesterCd, currentDate) : Promise.resolve(null),
-                            classCd ? getLookupValueName(db, '120', classCd, currentDate) : Promise.resolve(null),
-                            semesterCd ? getLookupValueSort(db, '140', semesterCd, currentDate) : Promise.resolve(0),
-                            classCd ? getLookupValueSort(db, '120', classCd, currentDate) : Promise.resolve(0)
+                            semesterCd ? getLookupValueName(db, '140', semesterCd, createYmd) : Promise.resolve(null),
+                            classCd ? getLookupValueName(db, '120', classCd, createYmd) : Promise.resolve(null),
+                            semesterCd ? getLookupValueSort(db, '140', semesterCd, createYmd) : Promise.resolve(0),
+                            classCd ? getLookupValueSort(db, '120', classCd, createYmd) : Promise.resolve(0)
                         ]).then(function(results) {
                             data.push({
                                 class_id: doc.id,
@@ -424,6 +427,8 @@
                     classGridApi.setGridOption('rowData', data);
                     if (data.length > 0) {
                         selectedClassId = data[0].class_id;
+                        selectedClassSemesterCd = data[0].semester_cd || '';
+                        selectedClassClassCd = data[0].class_cd || '';
                         loadStudentData(selectedClassId);
                         setTimeout(function() {
                             try {
@@ -619,7 +624,8 @@
                     
                     const data = {
                         semester_cd: semesterCd,
-                        class_cd: classCd
+                        class_cd: classCd,
+                        create_ymd: getCurrentDateYmd()
                     };
                     
                     return db.collection('bta_class').add(data);
@@ -692,22 +698,37 @@
                 return;
             }
             
-            db.collection('bta_class_students')
-                .where('class_id', '==', selectedClassId)
-                .where('userid', '==', userId)
-                .get()
-                .then(function(querySnapshot) {
-                    if (!querySnapshot.empty) {
-                        alert('이미 등록된 학생입니다.');
-                        return Promise.reject(new Error('중복'));
+            db.collection('bta_class').doc(selectedClassId).get()
+                .then(function(classDoc) {
+                    console.log('[saveStudent] classDoc.exists:', classDoc.exists);
+                    if (classDoc.exists) {
+                        console.log('[saveStudent] classDoc.data():', classDoc.data());
                     }
-                    
-                    const data = {
-                        class_id: selectedClassId,
-                        userid: userId
-                    };
-                    
-                    return db.collection('bta_class_students').add(data);
+                    var semesterCd = '';
+                    var classCd = '';
+                    if (classDoc.exists) {
+                        var d = classDoc.data();
+                        semesterCd = (d.semester_cd || '').toString().trim();
+                        classCd = (d.class_cd || '').toString().trim();
+                    }
+                    console.log('[saveStudent] selectedClassId:', selectedClassId, 'semesterCd:', semesterCd, 'classCd:', classCd);
+                    return db.collection('bta_class_students')
+                        .where('class_id', '==', selectedClassId)
+                        .where('userid', '==', userId)
+                        .get()
+                        .then(function(querySnapshot) {
+                            if (!querySnapshot.empty) {
+                                alert('이미 등록된 학생입니다.');
+                                return Promise.reject(new Error('중복'));
+                            }
+                            var data = {
+                                class_id: selectedClassId,
+                                userid: userId,
+                                semester_cd: semesterCd,
+                                class_cd: classCd
+                            };
+                            return db.collection('bta_class_students').add(data);
+                        });
                 })
                 .then(function() {
                     alert('등록되었습니다.');
@@ -1062,45 +1083,61 @@
                 return;
             }
             
-            const checkPromises = selectedRows.map(function(row) {
-                const userId = row.userId || '';
-                if (!userId) {
-                    return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
-                }
-                
-                return db.collection('bta_class_students')
-                    .where('class_id', '==', selectedClassId)
-                    .where('userid', '==', userId)
-                    .get()
-                    .then(function(querySnapshot) {
-                        return {
-                            duplicate: !querySnapshot.empty,
-                            name: row.name || '',
-                            userId: userId
-                        };
+            db.collection('bta_class').doc(selectedClassId).get()
+                .then(function(classDoc) {
+                    var semesterCd = '';
+                    var classCd = '';
+                    if (classDoc.exists) {
+                        var d = classDoc.data();
+                        semesterCd = (d.semester_cd || '').toString().trim();
+                        classCd = (d.class_cd || '').toString().trim();
+                    }
+                    var checkPromises = selectedRows.map(function(row) {
+                        var userId = row.userId || '';
+                        if (!userId) {
+                            return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
+                        }
+                        return db.collection('bta_class_students')
+                            .where('class_id', '==', selectedClassId)
+                            .where('userid', '==', userId)
+                            .get()
+                            .then(function(querySnapshot) {
+                                return {
+                                    duplicate: !querySnapshot.empty,
+                                    name: row.name || '',
+                                    userId: userId
+                                };
+                            });
                     });
-            });
-            
-            Promise.all(checkPromises)
-                .then(function(results) {
-                    const duplicates = results.filter(function(r) { return r.duplicate; });
+                    return Promise.all(checkPromises).then(function(results) {
+                        return { results: results, semesterCd: semesterCd, classCd: classCd };
+                    });
+                })
+                .then(function(o) {
+                    var results = o.results;
+                    var semesterCd = o.semesterCd;
+                    var classCd = o.classCd;
+                    var duplicates = results.filter(function(r) { return r.duplicate; });
                     
                     if (duplicates.length > 0) {
-                        const duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
+                        var duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
                         alert(duplicateNames + '이 등록되어 있습니다.');
                         return Promise.reject(new Error('duplicate'));
                     }
                     
-                    const validUsers = results.filter(function(r) { return r.userId; });
+                    var validUsers = results.filter(function(r) { return r.userId; });
                     if (validUsers.length === 0) {
                         return Promise.resolve();
                     }
                     
-                    const savePromises = validUsers.map(function(r) {
-                        const saveData = {
+                    var savePromises = validUsers.map(function(r) {
+                        var saveData = {
                             class_id: selectedClassId,
-                            userid: r.userId
+                            userid: r.userId,
+                            semester_cd: semesterCd,
+                            class_cd: classCd
                         };
+                        console.log('[saveSelectedUsers] Saving data:', saveData);
                         return db.collection('bta_class_students').add(saveData);
                     });
                     
@@ -1360,44 +1397,59 @@
                 return;
             }
             
-            const checkPromises = selectedRows.map(function(row) {
-                const userId = row.userId || '';
-                if (!userId) {
-                    return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
-                }
-                
-                return db.collection('bta_class_students')
-                    .where('class_id', '==', selectedClassId)
-                    .where('userid', '==', userId)
-                    .get()
-                    .then(function(querySnapshot) {
-                        return {
-                            duplicate: !querySnapshot.empty,
-                            name: row.name || '',
-                            userId: userId
-                        };
+            db.collection('bta_class').doc(selectedClassId).get()
+                .then(function(classDoc) {
+                    var semesterCd = '';
+                    var classCd = '';
+                    if (classDoc.exists) {
+                        var d = classDoc.data();
+                        semesterCd = (d.semester_cd || '').toString().trim();
+                        classCd = (d.class_cd || '').toString().trim();
+                    }
+                    var checkPromises = selectedRows.map(function(row) {
+                        var userId = row.userId || '';
+                        if (!userId) {
+                            return Promise.resolve({ duplicate: false, name: row.name || '', userId: null });
+                        }
+                        return db.collection('bta_class_students')
+                            .where('class_id', '==', selectedClassId)
+                            .where('userid', '==', userId)
+                            .get()
+                            .then(function(querySnapshot) {
+                                return {
+                                    duplicate: !querySnapshot.empty,
+                                    name: row.name || '',
+                                    userId: userId
+                                };
+                            });
                     });
-            });
-            
-            Promise.all(checkPromises)
-                .then(function(results) {
-                    const duplicates = results.filter(function(r) { return r.duplicate; });
+                    return Promise.all(checkPromises).then(function(results) {
+                        return { results: results, semesterCd: semesterCd, classCd: classCd };
+                    });
+                })
+                .then(function(o) {
+                    var results = o.results;
+                    var semesterCd = o.semesterCd;
+                    var classCd = o.classCd;
+                    var duplicates = results.filter(function(r) { return r.duplicate; });
                     
                     if (duplicates.length > 0) {
-                        const duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
+                        var duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
                         alert(duplicateNames + '이 등록되어 있습니다.');
                         return Promise.reject(new Error('duplicate'));
                     }
                     
-                    const validUsers = results.filter(function(r) { return r.userId; });
+                    var validUsers = results.filter(function(r) { return r.userId; });
                     if (validUsers.length === 0) {
                         return Promise.resolve();
                     }
                     
-                    const savePromises = validUsers.map(function(r) {
-                        const saveData = {
+                    var savePromises = validUsers.map(function(r) {
+                        var saveData = {
                             class_id: selectedClassId,
-                            userid: r.userId
+                            userid: r.userId,
+                            semester_cd: semesterCd,
+                            class_cd: classCd
                         };
                         return db.collection('bta_class_students').add(saveData);
                     });

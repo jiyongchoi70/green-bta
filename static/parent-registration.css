@@ -467,6 +467,21 @@ body.modal-open .modal * {
     width: 100px;
 }
 
+/* 학부모 조회 모달: 조회 영역 한 줄, 드롭박스 넓이 축소 */
+.search-fields-oneline {
+    flex-wrap: nowrap;
+}
+.search-select-narrow {
+    width: 85px;
+    min-width: 85px;
+}
+.search-section-oneline .search-input {
+    width: 100px;
+}
+.search-section-oneline #searchParentUserPhone {
+    width: 130px;
+}
+
 .search-fields #searchUserName {
     width: 120px;
 }

@@ -1,19 +1,94 @@
-.common-code-container {
+.task-list-search-container {
+    margin-top: 20px;
+}
+
+.search-section {
+    background-color: #f9fafb;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+
+.search-fields {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.search-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.search-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-field label {
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap;
+}
+
+.search-select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background-color: #fff;
+    min-width: 120px;
+}
+
+.search-select:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.search-button {
+    padding: 8px 20px;
+    background-color: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.search-button:hover {
+    background-color: #1e40af;
+}
+
+.required-field {
+    color: #ef4444;
+    margin-right: 3px;
+}
+
+.task-list-container {
     display: flex;
     gap: 20px;
     margin-top: 20px;
 }
 
-.master-section {
-    flex: 0 0 30%;
+.task-group-section {
+    flex: 0 0 70%;
     background-color: #f9fafb;
     padding: 20px;
     border-radius: 6px;
     border: 1px solid #e5e7eb;
 }
 
-.detail-section {
-    flex: 0 0 70%;
+.task-detail-section {
+    flex: 0 0 30%;
     background-color: #f9fafb;
     padding: 20px;
     border-radius: 6px;
@@ -27,6 +102,8 @@
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 2px solid #e5e7eb;
+    position: relative;
+    z-index: 1;
 }
 
 .section-icon {
@@ -40,23 +117,6 @@
     color: #333;
     margin: 0;
     flex: 1;
-}
-
-.export-excel-button {
-    padding: 6px 12px;
-    background-color: #2563eb;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    margin-right: 10px;
-}
-
-.export-excel-button:hover {
-    background-color: #1e40af;
 }
 
 .add-button {
@@ -79,17 +139,44 @@
     background-color: #333;
 }
 
-#masterGrid,
-#detailGrid {
-    width: 100%;
-    height: 500px;
+@media (max-width: 1024px) {
+    .search-fields {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-left {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-field {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-select {
+        width: 100%;
+        min-width: 0;
+    }
 }
 
-#masterGrid .ag-row-selected {
+#taskGroupGrid,
+#taskDetailGrid,
+#assignmentSubmitGrid {
+    width: 100%;
+    height: 480px;
+}
+
+#taskGroupGrid .ag-row-selected,
+#taskDetailGrid .ag-row-selected,
+#assignmentSubmitGrid .ag-row-selected {
     background-color: #e3f2fd !important;
 }
 
-#masterGrid .ag-row:hover {
+#taskGroupGrid .ag-row:hover,
+#taskDetailGrid .ag-row:hover,
+#assignmentSubmitGrid .ag-row:hover {
     background-color: #f5f5f5;
 }
 
@@ -137,7 +224,8 @@
     line-height: 1;
 }
 
-.close-button:hover {
+.close-button:hover,
+.close-button:focus {
     color: #000;
 }
 
@@ -160,27 +248,12 @@
 }
 
 .modal-form td:first-child {
-    width: 100px;
+    width: 120px;
     font-weight: bold;
     color: #333;
 }
 
-.required-field {
-    color: #dc2626 !important;
-    font-weight: bold;
-    margin-right: 3px;
-    font-size: 16px;
-}
-
-.modal-input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    font-family: inherit;
-}
-
+.modal-input,
 .modal-select {
     width: 100%;
     padding: 8px 12px;
@@ -188,20 +261,27 @@
     border-radius: 4px;
     font-size: 14px;
     font-family: inherit;
+    box-sizing: border-box;
     background-color: #fff;
 }
 
-.modal-input:disabled {
+.modal-input:focus,
+.modal-select:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.modal-select:disabled {
     background-color: #f5f5f5;
-    color: #999;
+    color: #666;
     cursor: not-allowed;
 }
 
-.modal-note {
-    display: block;
+.modal-note,
+.task-copy-note {
+    margin: 8px 0 0 0;
     font-size: 12px;
-    color: #666;
-    margin-top: 5px;
+    color: #6b7280;
 }
 
 .modal-footer {
@@ -210,6 +290,25 @@
     gap: 10px;
     padding: 20px;
     border-top: 1px solid #e5e7eb;
+}
+
+/* 과제목록 생성 모달: 넓이 축소 */
+.task-create-modal-content {
+    max-width: 440px;
+}
+
+/* 과제목록 생성 모달: 텍스트 위, 버튼 맨 아래 세로 배치 */
+.task-create-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.task-create-modal-footer .task-create-modal-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
 }
 
 .save-button,
@@ -232,6 +331,17 @@
     background-color: #1e40af;
 }
 
+.save-button:disabled {
+    background-color: #9ca3af;
+    color: #fff;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.save-button:disabled:hover {
+    background-color: #9ca3af;
+}
+
 .cancel-button {
     background-color: #e5e7eb;
     color: #333;
@@ -242,7 +352,8 @@
 }
 
 .edit-btn,
-.delete-btn {
+.delete-btn,
+.create-btn {
     padding: 5px 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
@@ -253,7 +364,8 @@
     transition: background-color 0.2s;
 }
 
-.edit-btn:hover {
+.edit-btn:hover,
+.create-btn:hover {
     background-color: #f0f0f0;
 }
 
@@ -261,15 +373,4 @@
     background-color: #fee2e2;
     border-color: #dc2626;
     color: #dc2626;
-}
-
-@media (max-width: 1024px) {
-    .common-code-container {
-        flex-direction: column;
-    }
-    
-    #masterGrid,
-    #detailGrid {
-        height: 300px;
-    }
 }

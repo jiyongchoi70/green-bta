@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사원 발령 관리 - BTA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='user_assignment.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
+    <script src="{{ url_for('static', filename='user_search_modal.js') }}"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">사원 발령 관리</h1>
+            <a href="/" class="home-button">홈</a>
+        </div>
+        
+        <div class="user-assignment-container">
+            <div class="search-section">
+                <div class="search-fields">
+                    <div class="search-left">
+                        <div class="search-field">
+                            <label>성명</label>
+                            <input type="text" id="searchName" class="search-input" placeholder="성명 입력">
+                        </div>
+                        <div class="search-field">
+                            <label>조직</label>
+                            <select id="searchOrg" class="search-select">
+                                <option value="">전체</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label>재직여부</label>
+                            <select id="searchStatus" class="search-select">
+                                <option value="">전체</option>
+                                <option value="current">재직중</option>
+                                <option value="resigned">전출</option>
+                            </select>
+                        </div>
+                        <button id="searchButton" class="search-button">조회</button>
+                    </div>
+                    <div class="search-right">
+                        <button id="addButton" class="add-button">+</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="assignmentGrid" class="ag-theme-alpine"></div>
+        </div>
+    </div>
+    
+    <!-- 발령 등록/수정 모달 -->
+    <div id="assignmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="assignmentModalTitle">사원 발령</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <table class="modal-form">
+                    <tr>
+                        <td><span class="required-field">*</span> 사용자</td>
+                        <td>
+                            <input type="text" id="modalUserName" class="modal-input" readonly>
+                            <input type="hidden" id="modalUserId">
+                            <button id="userSearchButton" class="user-search-button">검색</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 조직</td>
+                        <td>
+                            <select id="modalOrg" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 직책</td>
+                        <td>
+                            <select id="modalPosition" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 발령일</td>
+                        <td>
+                            <input type="date" id="modalStartDate" class="modal-input" max="9999-12-31">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>전출일</td>
+                        <td>
+                            <input type="date" id="modalEndDate" class="modal-input" max="9999-12-31">
+                            <span class="modal-note">비어있으면 현재 재직중</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="saveAssignmentButton" class="save-button">저장</button>
+                <button id="cancelAssignmentButton" class="cancel-button">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        
+        let gridApi;
+        let isEditMode = false;
+        let editingAssignmentId = null;
+        let allOrganizations = [];
+        
+        // 현재 날짜 (YYYYMMDD)
+        function getCurrentDateYmd() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+        
+        // 공통코드 및 조직 로드
+        function loadCommonCodes() {
+            const currentDate = getCurrentDateYmd();
+            
+            // 직책 로드
+            db.collection('bta_lookup_value')
+                .where('type_cd', '==', 'POSITION')
+                .where('start_ymd', '<=', currentDate)
+                .where('end_ymd', '>=', currentDate)
+                .orderBy('start_ymd')
+                .orderBy('sort')
+                .get()
+                .then(function(querySnapshot) {
+                    const select = document.getElementById('modalPosition');
+                    select.innerHTML = '<option value="">선택하세요</option>';
+                    querySnapshot.forEach(function(doc) {
+                        const data = doc.data();
+                        const option = document.createElement('option');
+                        option.value = data.value_cd;
+                        option.textContent = data.value_nm;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(function(error) {
+                    console.error('직책 공통코드 로드 오류:', error);
+                });
+            
+            // 조직 로드
+            db.collection('bta_organization')
+                .orderBy('level')
+                .orderBy('order')
+                .get()
+                .then(function(querySnapshot) {
+                    allOrganizations = [];
+                    const modalSelect = document.getElementById('modalOrg');
+                    const searchSelect = document.getElementById('searchOrg');
+                    
+                    modalSelect.innerHTML = '<option value="">선택하세요</option>';
+                    searchSelect.innerHTML = '<option value="">전체</option>';
+                    
+                    querySnapshot.forEach(function(doc) {
+                        const org = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
+                        allOrganizations.push(org);
+                        
+                        // 모달 선택 박스
+                        const modalOption = document.createElement('option');
+                        modalOption.value = doc.id;
+                        const indent = '　'.repeat(org.level || 0);
+                        modalOption.textContent = indent + org.name;
+                        modalSelect.appendChild(modalOption);
+                        
+                        // 검색 선택 박스
+                        const searchOption = document.createElement('option');
+                        searchOption.value = doc.id;
+                        searchOption.textContent = indent + org.name;
+                        searchSelect.appendChild(searchOption);
+                    });
+                })
+                .catch(function(error) {
+                    console.error('조직 데이터 로드 오류:', error);
+                });
+        }
+        
+        // 그리드 컬럼 정의
+        const columnDefs = [
+            {
+                headerName: '순서',
+                width: 60,
+                valueGetter: function(params) {
+                    return params.node ? params.node.rowIndex + 1 : '';
+                }
+            },
+            { field: 'user_name', headerName: '성명', width: 100 },
+            { field: 'org_name', headerName: '조직', width: 200 },
+            { field: 'position_nm', headerName: '직책', width: 100 },
+            { field: 'start_date', headerName: '발령일', width: 120 },
+            { 
+                field: 'end_date', 
+                headerName: '전출일', 
+                width: 120,
+                valueFormatter: function(params) {
+                    return params.value || '재직중';
+                }
+            },
+            {
+                field: 'status',
+                headerName: '상태',
+                width: 90,
+                valueGetter: function(params) {
+                    return params.data.end_date ? '전출' : '재직중';
+                }
+            },
+            {
+                headerName: '수정',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="edit-btn">수정</button>';
+                },
+                onCellClicked: function(params) {
+                    openEditAssignmentModal(params.data);
+                }
+            },
+            {
+                headerName: '삭제',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="delete-btn">삭제</button>';
+                },
+                onCellClicked: function(params) {
+                    deleteAssignment(params.data);
+                }
+            }
+        ];
+        
+        const gridOptions = {
+            columnDefs: columnDefs,
+            defaultColDef: {
+                resizable: true
+            },
+            pagination: true,
+            paginationPageSize: 100,
+            domLayout: 'normal',
+            rowHeight: 40
+        };
+        
+        // 그리드 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            gridApi = agGrid.createGrid(document.querySelector('#assignmentGrid'), gridOptions);
+            
+            loadCommonCodes();
+            loadAssignments();
+            
+            // 모달 이벤트
+            const modal = document.getElementById('assignmentModal');
+            const closeBtn = modal.querySelector('.close-button');
+            const addBtn = document.getElementById('addButton');
+            const saveBtn = document.getElementById('saveAssignmentButton');
+            const cancelBtn = document.getElementById('cancelAssignmentButton');
+            const searchBtn = document.getElementById('searchButton');
+            const userSearchBtn = document.getElementById('userSearchButton');
+            
+            addBtn.addEventListener('click', function() {
+                openAddAssignmentModal();
+            });
+            
+            closeBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+            
+            saveBtn.addEventListener('click', function() {
+                saveAssignment();
+            });
+            
+            searchBtn.addEventListener('click', function() {
+                const name = document.getElementById('searchName').value.trim();
+                const orgId = document.getElementById('searchOrg').value;
+                const status = document.getElementById('searchStatus').value;
+                loadAssignments(name, orgId, status);
+            });
+            
+            userSearchBtn.addEventListener('click', function() {
+                openUserSearchModal(function(selectedUser) {
+                    document.getElementById('modalUserId').value = selectedUser.id;
+                    document.getElementById('modalUserName').value = selectedUser.name;
+                });
+            });
+            
+            window.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+        
+        // 발령 데이터 로드
+        function loadAssignments(searchName, searchOrgId, searchStatus) {
+            let query = db.collection('bta_user_assignment');
+            
+            if (searchOrgId) {
+                query = query.where('org_id', '==', searchOrgId);
+            }
+            
+            if (searchStatus === 'current') {
+                query = query.where('end_date', '==', null);
+            } else if (searchStatus === 'resigned') {
+                query = query.where('end_date', '!=', null);
+            }
+            
+            query.orderBy('start_date', 'desc')
+                .get()
+                .then(function(querySnapshot) {
+                    const assignments = [];
+                    querySnapshot.forEach(function(doc) {
+                        const data = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
+                        
+                        // 이름 필터링
+                        if (searchName && !data.user_name.includes(searchName)) {
+                            return;
+                        }
+                        
+                        assignments.push(data);
+                    });
+                    gridApi.setRowData(assignments);
+                })
+                .catch(function(error) {
+                    console.error('발령 데이터 로드 오류:', error);
+                    alert('발령 데이터 로드 중 오류가 발생했습니다.');
+                });
+        }
+        
+        // 발령 추가 모달 열기
+        function openAddAssignmentModal() {
+            isEditMode = false;
+            editingAssignmentId = null;
+            
+            document.getElementById('assignmentModalTitle').textContent = '사원 발령';
+            document.getElementById('modalUserId').value = '';
+            document.getElementById('modalUserName').value = '';
+            document.getElementById('modalOrg').value = '';
+            document.getElementById('modalPosition').value = '';
+            document.getElementById('modalStartDate').value = getCurrentDateYmd();
+            document.getElementById('modalEndDate').value = '';
+            
+            document.getElementById('assignmentModal').style.display = 'block';
+        }
+        
+        // 발령 수정 모달 열기
+        function openEditAssignmentModal(assignmentData) {
+            isEditMode = true;
+            editingAssignmentId = assignmentData.id;
+            
+            document.getElementById('assignmentModalTitle').textContent = '발령 수정';
+            document.getElementById('modalUserId').value = assignmentData.user_id || '';
+            document.getElementById('modalUserName').value = assignmentData.user_name || '';
+            document.getElementById('modalOrg').value = assignmentData.org_id || '';
+            document.getElementById('modalPosition').value = assignmentData.position || '';
+            document.getElementById('modalStartDate').value = assignmentData.start_date || '';
+            document.getElementById('modalEndDate').value = assignmentData.end_date || '';
+            
+            document.getElementById('assignmentModal').style.display = 'block';
+        }
+        
+        // 발령 저장
+        function saveAssignment() {
+            const userId = document.getElementById('modalUserId').value;
+            const userName = document.getElementById('modalUserName').value;
+            const orgId = document.getElementById('modalOrg').value;
+            const position = document.getElementById('modalPosition').value;
+            const startDate = document.getElementById('modalStartDate').value;
+            const endDate = document.getElementById('modalEndDate').value || null;
+            
+            if (!userId) {
+                alert('사용자를 선택하세요.');
+                return;
+            }
+            
+            if (!orgId) {
+                alert('조직을 선택하세요.');
+                return;
+            }
+            
+            if (!position) {
+                alert('직책을 선택하세요.');
+                return;
+            }
+            
+            if (!startDate) {
+                alert('발령일을 입력하세요.');
+                return;
+            }
+            
+            // 조직명 가져오기
+            const org = allOrganizations.find(o => o.id === orgId);
+            const orgName = org ? org.name : '';
+            
+            // 직책명 가져오기
+            const positionSelect = document.getElementById('modalPosition');
+            const positionName = positionSelect.options[positionSelect.selectedIndex].text;
+            
+            const assignmentData = {
+                user_id: userId,
+                user_name: userName,
+                org_id: orgId,
+                org_name: orgName,
+                position: position,
+                position_nm: positionName,
+                start_date: startDate,
+                end_date: endDate,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            if (isEditMode && editingAssignmentId) {
+                // 수정
+                db.collection('bta_user_assignment').doc(editingAssignmentId)
+                    .update(assignmentData)
+                    .then(function() {
+                        alert('발령이 수정되었습니다.');
+                        document.getElementById('assignmentModal').style.display = 'none';
+                        loadAssignments();
+                    })
+                    .catch(function(error) {
+                        console.error('발령 수정 오류:', error);
+                        alert('발령 수정 중 오류가 발생했습니다.');
+                    });
+            } else {
+                // 추가 - 기존 재직중인 발령 확인
+                db.collection('bta_user_assignment')
+                    .where('user_id', '==', userId)
+                    .where('end_date', '==', null)
+                    .get()
+                    .then(function(querySnapshot) {
+                        if (!querySnapshot.empty && !confirm('재직중인 발령이 있습니다.\n기존 발령을 전출 처리하고 새로 발령하시겠습니까?')) {
+                            return Promise.reject('cancel');
+                        }
+                        
+                        // 배치 작업
+                        const batch = db.batch();
+                        
+                        // 기존 발령 전출 처리
+                        querySnapshot.forEach(function(doc) {
+                            batch.update(doc.ref, {
+                                end_date: startDate,
+                                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        });
+                        
+                        // 새 발령 추가
+                        assignmentData.created_at = firebase.firestore.FieldValue.serverTimestamp();
+                        const newAssignmentRef = db.collection('bta_user_assignment').doc();
+                        batch.set(newAssignmentRef, assignmentData);
+                        
+                        return batch.commit();
+                    })
+                    .then(function() {
+                        alert('발령이 완료되었습니다.');
+                        document.getElementById('assignmentModal').style.display = 'none';
+                        loadAssignments();
+                    })
+                    .catch(function(error) {
+                        if (error !== 'cancel') {
+                            console.error('발령 추가 오류:', error);
+                            alert('발령 추가 중 오류가 발생했습니다.');
+                        }
+                    });
+            }
+        }
+        
+        // 발령 삭제
+        function deleteAssignment(assignmentData) {
+            if (!confirm(`${assignmentData.user_name}님의 발령 기록을 삭제하시겠습니까?`)) {
+                return;
+            }
+            
+            db.collection('bta_user_assignment').doc(assignmentData.id)
+                .delete()
+                .then(function() {
+                    alert('발령 기록이 삭제되었습니다.');
+                    loadAssignments();
+                })
+                .catch(function(error) {
+                    console.error('발령 삭제 오류:', error);
+                    alert('발령 삭제 중 오류가 발생했습니다.');
+                });
+        }
+    </script>
+</body>
+</html>

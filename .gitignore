@@ -1,0 +1,27 @@
+# IDE / editor
+.cursor/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.venv/
+env/
+
+# Firebase / debug
+firebase-debug.log
+.firebase/*.cache
+
+# Local config (if any)
+.env
+.env.local
+*.local
+
+# OS
+.DS_Store
+Thumbs.db

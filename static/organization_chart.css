@@ -1,0 +1,321 @@
+/* 조직도 조회 전용 스타일 */
+
+.announcements-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.action-button {
+    padding: 8px 16px;
+    background-color: #10b981;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.action-button:hover {
+    background-color: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 조직도 컨테이너 */
+.org-chart-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    overflow-x: auto;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    min-height: 600px;
+}
+
+/* 조직 트리 */
+.org-tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+    position: relative;
+}
+
+/* 조직 카드 */
+.org-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    min-width: 280px;
+    max-width: 350px;
+    margin: 10px;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.org-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 레벨별 색상 */
+.org-level-0 {
+    border-color: #2563eb;
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+}
+
+.org-level-1 {
+    border-color: #3b82f6;
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+}
+
+.org-level-2 {
+    border-color: #60a5fa;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+}
+
+.org-level-3 {
+    border-color: #93c5fd;
+}
+
+.org-level-4 {
+    border-color: #bfdbfe;
+}
+
+/* 조직 정보 */
+.org-info {
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.org-card-name {
+    font-size: 20px;
+    font-weight: bold;
+    color: #1e40af;
+    margin-bottom: 8px;
+}
+
+.org-card-type {
+    display: inline-block;
+    padding: 4px 12px;
+    background: #2563eb;
+    color: white;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* 소속 인원 */
+.org-members {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.member-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+}
+
+.member-card:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.member-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.member-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.member-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.member-position {
+    font-size: 11px;
+    color: #64748b;
+    background: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* 하위 조직 컨테이너 */
+.org-children {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+    position: relative;
+}
+
+.org-children-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    position: relative;
+}
+
+/* 연결선 */
+.org-connector {
+    width: 2px;
+    height: 40px;
+    background: linear-gradient(180deg, #2563eb 0%, #60a5fa 100%);
+    margin: 0 auto;
+    position: relative;
+}
+
+.org-connector::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid #60a5fa;
+}
+
+/* 여러 하위 조직이 있을 때 가로 연결선 */
+.org-children-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #60a5fa;
+}
+
+/* 첫 번째와 마지막 하위 조직에만 세로 연결선 */
+.org-tree:first-child > .org-card::before,
+.org-tree:last-child > .org-card::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 30px;
+    background: #60a5fa;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .org-card {
+        min-width: 240px;
+        max-width: 100%;
+    }
+    
+    .org-chart-container {
+        padding: 20px 10px;
+    }
+    
+    .org-children-wrapper {
+        flex-direction: column;
+    }
+}
+
+/* 인쇄 스타일 */
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 15mm;
+    }
+    
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .announcements-header {
+        page-break-after: avoid;
+    }
+    
+    .action-button,
+    .home-button {
+        display: none;
+    }
+    
+    .org-card {
+        page-break-inside: avoid;
+    }
+    
+    .org-chart-container {
+        background: white;
+        min-height: auto;
+    }
+}
+
+/* 로딩 상태 */
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    font-size: 18px;
+    color: #6b7280;
+}
+
+/* 빈 상태 */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    color: #6b7280;
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 18px;
+    font-weight: 500;
+}

@@ -5,7 +5,7 @@
 }
 
 .master-section {
-    flex: 0 0 20%;
+    flex: 0 0 30%;
     background-color: #f9fafb;
     padding: 20px;
     border-radius: 6px;
@@ -13,7 +13,7 @@
 }
 
 .detail-section {
-    flex: 1;
+    flex: 0 0 70%;
     background-color: #f9fafb;
     padding: 20px;
     border-radius: 6px;
@@ -179,6 +179,16 @@
     border-radius: 4px;
     font-size: 14px;
     font-family: inherit;
+}
+
+.modal-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background-color: #fff;
 }
 
 .modal-input:disabled {

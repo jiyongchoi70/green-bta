@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>학부모 등록 - BTA</title>
-    <link rel="stylesheet" href="../../static/style.css">
-    <link rel="stylesheet" href="../../static/parent-registration.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='parent-registration.css') }}">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -13,16 +13,16 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="../../static/common_code_util.js"></script>
-    <script src="../../static/user_search_modal.js"></script>
-    <script src="../../static/parent_user_search_modal.js"></script>
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
+    <script src="{{ url_for('static', filename='user_search_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='parent_user_search_modal.js') }}"></script>
 </head>
 <body>
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyBQQ5pAccety6OewHpZFbKh8WMrVJb6Kxg",
-            projectId: "greentree-bta",
-            storageBucket: "greentree-bta.firebasestorage.app"
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
         };
         if (firebaseConfig.apiKey && firebaseConfig.projectId) {
             firebase.initializeApp(firebaseConfig);
@@ -31,7 +31,7 @@
     <div class="container">
         <div class="announcements-header">
             <h1 class="page-title">학부모 등록</h1>
-            <a href="../../" class="home-button">홈</a>
+            <a href="/" class="home-button">홈</a>
         </div>
 
         <div class="parent-registration-container">
@@ -626,7 +626,7 @@
                 loadLookupLists();
                 loadParentData();
             } else {
-                window.location.href = '../../login.html';
+                window.location.href = '/login';
             }
         });
     </script>

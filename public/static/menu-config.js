@@ -55,19 +55,13 @@ const MENU_CONFIG = {
         
         // 두 번째 행
         {
-            label: '학생선택',
+            label: '과제제출확인',
             column: '코치방',
             rowIndex: 1,
             link: './menu/coach/student-select.html',
             userTypes: ['110', '130']
         },
-        {
-            label: '기록과제물',
-            column: '학생방',
-            rowIndex: 1,
-            link: './menu/student/record-assignment.html',
-            userTypes: ['100', '130']
-        },
+        // 학생방 - 기록과제물 삭제됨
         {
             label: '과제제출확인',
             column: '학부모방',
@@ -87,7 +81,7 @@ const MENU_CONFIG = {
         {
             label: '과제제출확인',
             column: '학생방',
-            rowIndex: 2,
+            rowIndex: 1,
             link: './menu/student/assignment-submit.html',
             userTypes: ['100', '130']
         },
@@ -125,5 +119,32 @@ const MENU_CONFIG = {
             link: './menu/system/common-code.html',
             userTypes: ['130']
         }
+        
+        // 일곱 번째 행 - 조직도 (숨김)
+        // {
+        //     label: '조직도',
+        //     column: '관리자',
+        //     rowIndex: 6,
+        //     link: './menu/system/organization.html',
+        //     userTypes: ['130']
+        // },
+        
+        // 여덟 번째 행 - 발령 (숨김)
+        // {
+        //     label: '발령',
+        //     column: '관리자',
+        //     rowIndex: 7,
+        //     link: './menu/system/user-assignment.html',
+        //     userTypes: ['130']
+        // },
+        
+        // 아홉 번째 행 - 조직도조회 (숨김)
+        // {
+        //     label: '조직도조회',
+        //     column: '관리자',
+        //     rowIndex: 8,
+        //     link: './menu/system/organization-chart.html',
+        //     userTypes: ['130']
+        // }
     ]
 };

@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>학부모님 - 과제제출확인</title>
-    <link rel="stylesheet" href="../../static/style.css">
-    <link rel="stylesheet" href="../../static/task_list.css">
+    <title>학생방 - 과제제출확인</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='task_list.css') }}">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
-    <script src="../../static/common_code_util.js"></script>
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
 </head>
 <body>
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyBQQ5pAccety6OewHpZFbKh8WMrVJb6Kxg",
-            projectId: "greentree-bta",
-            storageBucket: "greentree-bta.firebasestorage.app"
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
         };
         if (firebaseConfig.apiKey && firebaseConfig.projectId) {
             firebase.initializeApp(firebaseConfig);
@@ -33,7 +33,7 @@
     <div class="container">
         <div class="announcements-header">
             <h1 class="page-title">과제제출확인</h1>
-            <a href="../../" class="home-button">홈</a>
+            <a href="/" class="home-button">홈</a>
         </div>
 
         <div class="task-list-search-container">
@@ -47,8 +47,15 @@
                             </select>
                         </div>
                         <div class="search-field">
+                            <label><span class="required-field">*</span>반</label>
+                            <select id="searchClass" class="search-select" title="필수 (학기 선택 후 선택 가능)" disabled>
+                                <option value="">선택하세요</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
                             <label><span class="required-field">*</span>학생</label>
-                            <select id="searchStudent" class="search-select" title="필수 (학기 선택 후 표시)" disabled style="min-width: 140px;">
+                            <select id="searchStudent" class="search-select" title="로그인한 본인" disabled style="min-width: 140px;">
+                                <option value="">선택하세요</option>
                             </select>
                         </div>
                         <button id="searchButton" class="search-button">조회</button>
@@ -78,6 +85,7 @@
             <div class="modal-body">
                 <style>
                     #performanceGrid .ag-header-cell.ag-header-cell-center { text-align: center; }
+                    #performanceGrid .ag-cell.ag-cell-center { text-align: center; }
                     #performanceGrid .performance-content-select { text-align: center; }
                 </style>
                 <div id="performanceGrid" class="ag-theme-alpine" style="height: 500px; width: 100%;"></div>
@@ -118,36 +126,39 @@
             return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
         }
 
-        var parentSelectedClassCd = '';
-        var currentUserType = '';
-        var todayYmd = getCurrentDateYmd();
+        var userClassIds = [];
+        var semesterCreateYmdMap = {};
+        var classCreateYmdMap = {};
 
         function loadSemesterOptions() {
             var user = auth.currentUser;
             if (!user) return Promise.resolve();
             var uid = user.uid;
-            return db.collection('bta_parent').where('userid', '==', uid).get()
-                .then(function(snap) {
+            return db.collection('bta_class_students').where('userid', '==', uid).get()
+                .then(function(csSnap) {
+                    userClassIds = [];
+                    csSnap.forEach(function(doc) { userClassIds.push(doc.data().class_id || doc.id); });
+                    if (userClassIds.length === 0) return [];
+                    var promises = userClassIds.map(function(cid) { return db.collection('bta_class').doc(cid).get(); });
+                    return Promise.all(promises);
+                })
+                .then(function(docSnaps) {
                     var seen = {};
                     var list = [];
-                    snap.forEach(function(doc) {
-                        var d = doc.data();
+                    docSnaps.forEach(function(ds) {
+                        if (!ds.exists) return;
+                        var d = ds.data();
                         var semesterCd = (d.semester_cd || '').toString().trim();
-                        var createYmd = (d.create_ymd || todayYmd).toString().trim();
+                        var createYmd = (d.create_ymd || getCurrentDateYmd()).toString().trim();
                         if (!semesterCd || createYmd.length !== 8) return;
-                        if (seen[semesterCd]) return;
-                        seen[semesterCd] = true;
+                        var key = semesterCd;
+                        if (seen[key]) return;
+                        seen[key] = true;
                         list.push({ semester_cd: semesterCd, create_ymd: createYmd });
                     });
                     return list;
                 })
                 .then(function(list) {
-                    if (list.length === 0) {
-                        document.getElementById('searchSemester').innerHTML = '<option value="">선택하세요</option>';
-                        document.getElementById('searchStudent').innerHTML = '';
-                        document.getElementById('searchStudent').disabled = true;
-                        return;
-                    }
                     var promises = list.map(function(item) {
                         return getLookupValueName(db, '140', item.semester_cd, item.create_ymd)
                             .then(function(nm) { return { value_cd: item.semester_cd, value_nm: nm || item.semester_cd, create_ymd: item.create_ymd }; })
@@ -156,7 +167,6 @@
                     return Promise.all(promises);
                 })
                 .then(function(options) {
-                    if (!options || options.length === 0) return;
                     var sortPromises = options.map(function(o) {
                         return getLookupValueSort(db, '140', o.value_cd, o.create_ymd)
                             .then(function(s) { return { option: o, sortVal: (s !== undefined && s !== null) ? s : 0 }; })
@@ -165,7 +175,6 @@
                     return Promise.all(sortPromises);
                 })
                 .then(function(withSort) {
-                    if (!withSort || withSort.length === 0) return;
                     withSort.sort(function(a, b) { return (b.sortVal - a.sortVal); });
                     var sel = document.getElementById('searchSemester');
                     sel.innerHTML = '';
@@ -176,142 +185,115 @@
                         opt.textContent = o.value_nm;
                         sel.appendChild(opt);
                     });
-                    sel.selectedIndex = 0;
-                    loadStudentOptions(sel.value);
+                    document.getElementById('searchClass').disabled = true;
+                    document.getElementById('searchClass').innerHTML = '';
+                    if (withSort.length > 0) {
+                        sel.selectedIndex = 0;
+                        loadClassOptions(sel.value);
+                    }
                 })
                 .catch(function(err) { console.error('학기 목록 로드 오류:', err); });
         }
 
-        function loadStudentOptions(semesterCd) {
-            var sel = document.getElementById('searchStudent');
-            sel.innerHTML = '';
-            sel.disabled = true;
-            if (!semesterCd) return Promise.resolve();
-            var user = auth.currentUser;
-            if (!user) return Promise.resolve();
-            return db.collection('bta_parent').where('userid', '==', user.uid).where('semester_cd', '==', semesterCd).get()
-                .then(function(parentSnap) {
-                    if (parentSnap.empty) return [];
-                    var parentIds = [];
-                    parentSnap.forEach(function(doc) { parentIds.push(doc.id); });
-                    return Promise.all(parentIds.map(function(pid) {
-                        return db.collection('bta_parent_students').where('parent_id', '==', pid).get();
-                    }));
-                })
-                .then(function(snapList) {
-                    var useridSet = {};
-                    snapList.forEach(function(snap) {
-                        snap.forEach(function(doc) {
-                            var uid = (doc.data().userid || doc.data().userld || '').toString().trim();
-                            if (uid) useridSet[uid] = true;
-                        });
+        function loadClassOptions(semesterCd) {
+            if (!semesterCd) {
+                document.getElementById('searchClass').innerHTML = '';
+                document.getElementById('searchClass').disabled = true;
+                return Promise.resolve();
+            }
+            var promises = userClassIds.map(function(cid) { return db.collection('bta_class').doc(cid).get(); });
+            return Promise.all(promises)
+                .then(function(docSnaps) {
+                    var seen = {};
+                    var list = [];
+                    docSnaps.forEach(function(ds) {
+                        if (!ds.exists) return;
+                        var d = ds.data();
+                        if ((d.semester_cd || '').toString().trim() !== semesterCd) return;
+                        var classCd = (d.class_cd || '').toString().trim();
+                        var createYmd = (d.create_ymd || getCurrentDateYmd()).toString().trim();
+                        if (!classCd || createYmd.length !== 8) return;
+                        if (seen[classCd]) return;
+                        seen[classCd] = true;
+                        list.push({ class_cd: classCd, create_ymd: createYmd });
                     });
-                    return Object.keys(useridSet);
+                    return list;
                 })
-                .then(function(userids) {
-                    if (userids.length === 0) {
-                        sel.disabled = false;
-                        return;
-                    }
-                    return Promise.all(userids.map(function(uid) {
-                        return db.collection('bta_users').where('userId', '==', uid).limit(1).get()
-                            .then(function(snap) {
-                                if (snap.empty) return { userid: uid, name: uid };
-                                var d = snap.docs[0].data();
-                                return { userid: uid, name: (d.name || '').toString().trim() || uid };
-                            })
-                            .catch(function() { return { userid: uid, name: uid }; });
-                    })).then(function(arr) {
-                        arr.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-                        arr.forEach(function(p) {
-                            var opt = document.createElement('option');
-                            opt.value = p.userid;
-                            opt.textContent = p.name || p.userid;
-                            sel.appendChild(opt);
-                        });
-                        sel.disabled = false;
-                        if (arr.length > 0) sel.selectedIndex = 0;
+                .then(function(list) {
+                    var promises = list.map(function(item) {
+                        return getLookupValueName(db, '120', item.class_cd, item.create_ymd)
+                            .then(function(nm) { return { value_cd: item.class_cd, value_nm: nm || item.class_cd, create_ymd: item.create_ymd }; })
+                            .catch(function() { return { value_cd: item.class_cd, value_nm: item.class_cd, create_ymd: item.create_ymd }; });
                     });
+                    return Promise.all(promises);
                 })
-                .catch(function(err) {
-                    console.error('학생 목록 로드 오류:', err);
+                .then(function(options) {
+                    var sortPromises = options.map(function(o) {
+                        return getLookupValueSort(db, '120', o.value_cd, o.create_ymd)
+                            .then(function(s) { return { o: o, sortVal: (s != null) ? s : 0 }; })
+                            .catch(function() { return { o: o, sortVal: 0 }; });
+                    });
+                    return Promise.all(sortPromises);
+                })
+                .then(function(withSort) {
+                    withSort.sort(function(a, b) { return a.sortVal - b.sortVal; });
+                    var sel = document.getElementById('searchClass');
+                    sel.innerHTML = '';
+                    withSort.forEach(function(p) {
+                        var o = p.o;
+                        var opt = document.createElement('option');
+                        opt.value = o.value_cd;
+                        opt.textContent = o.value_nm;
+                        sel.appendChild(opt);
+                    });
                     sel.disabled = false;
-                });
+                    if (withSort.length > 0) sel.selectedIndex = 0;
+                })
+                .catch(function(err) { console.error('반 목록 로드 오류:', err); });
         }
 
         function validateSearchCondition() {
             var semester = document.getElementById('searchSemester').value;
+            var cls = document.getElementById('searchClass').value;
             var student = document.getElementById('searchStudent').value;
             if (!semester) { alert('학기를 선택해주세요.'); return false; }
-            if (!student) { alert('학생을 선택해주세요.'); return false; }
+            if (!cls) { alert('반을 선택해주세요.'); return false; }
+            if (!student) { alert('학생 정보를 확인할 수 없습니다. 다시 로그인해주세요.'); return false; }
             return true;
         }
 
         var assignmentSubmitGridApi = null;
 
-        function loadAssignmentSubmitDataParent(semesterCd, userid) {
+        function loadAssignmentSubmitDataStudent(semesterCd, classCd, userid) {
             if (!assignmentSubmitGridApi || !userid) {
                 if (assignmentSubmitGridApi) assignmentSubmitGridApi.setGridOption('rowData', []);
-                parentSelectedClassCd = '';
                 return;
             }
             assignmentSubmitGridApi.setGridOption('rowData', []);
-            parentSelectedClassCd = '';
             var today = getCurrentDateYmd();
             var weekDateMap = {};
             var studentName = document.getElementById('searchStudent').options[document.getElementById('searchStudent').selectedIndex].textContent;
-            // 1) 학생의 반(class_cd) 조회: bta_student_score에서 먼저, 없으면 bta_class_students + bta_class에서
-            function getClassCd() {
-                return db.collection('bta_student_score').where('semester_cd', '==', semesterCd).where('userid', '==', userid).limit(1).get()
-                    .then(function(snap) {
-                        if (!snap.empty) {
-                            var classCd = (snap.docs[0].data().class_cd || '').toString().trim();
-                            if (classCd) { parentSelectedClassCd = classCd; return classCd; }
-                        }
-                        return db.collection('bta_class_students').where('userid', '==', userid).get();
-                    })
-                    .then(function(csSnapOrCd) {
-                        if (typeof csSnapOrCd === 'string') return csSnapOrCd;
-                        var csSnap = csSnapOrCd;
-                        if (csSnap.empty) return null;
-                        var promises = [];
-                        csSnap.forEach(function(doc) {
-                            var classId = doc.data().class_id || doc.id;
-                            promises.push(db.collection('bta_class').doc(classId).get().then(function(cDoc) {
-                                if (!cDoc.exists) return null;
-                                var d = cDoc.data();
-                                if ((d.semester_cd || '').toString().trim() !== semesterCd) return null;
-                                return (d.class_cd || '').toString().trim();
-                            }));
-                        });
-                        return Promise.all(promises).then(function(cds) {
-                            var classCd = (cds.filter(function(c) { return c; })[0] || '').toString().trim();
-                            if (classCd) parentSelectedClassCd = classCd;
-                            return classCd || null;
-                        });
+            // 1) bta_task_group에서 해당 학기·반의 주차 목록 조회 (view_ymd <= 오늘인 주차만)
+            db.collection('bta_task_group')
+                .where('semester_cd', '==', semesterCd)
+                .where('class_cd', '==', classCd)
+                .get()
+                .then(function(tgSnap) {
+                    var weekList = [];
+                    tgSnap.forEach(function(doc) {
+                        var d = doc.data();
+                        var viewYmd = (d.view_ymd || '').toString().trim();
+                        if (!viewYmd || viewYmd.length !== 8 || viewYmd > today) return;
+                        var wc = (d.week_cd || '').toString().trim();
+                        if (!wc) return;
+                        weekDateMap[wc] = { start_ymd: (d.start_ymd || '').toString().trim(), end_ymd: (d.end_ymd || '').toString().trim(), create_ymd: (d.create_ymd || '').toString().trim() };
+                        weekList.push({ week_cd: wc, create_ymd: weekDateMap[wc].create_ymd || weekDateMap[wc].start_ymd || today });
                     });
-            }
-            getClassCd()
-                .then(function(classCd) {
-                    if (!classCd) return Promise.reject(new Error('학생의 반 정보를 찾을 수 없습니다.'));
-                    // 2) bta_task_group에서 해당 학기·반의 주차 목록 조회 (view_ymd <= 오늘인 주차만)
-                    return db.collection('bta_task_group')
+                    return Promise.all([Promise.resolve(weekList), db.collection('bta_student_score')
                         .where('semester_cd', '==', semesterCd)
                         .where('class_cd', '==', classCd)
-                        .get()
-                        .then(function(tgSnap) {
-                            var weekList = [];
-                            tgSnap.forEach(function(doc) {
-                                var d = doc.data();
-                                var viewYmd = (d.view_ymd || '').toString().trim();
-                                if (!viewYmd || viewYmd.length !== 8 || viewYmd > today) return;
-                                var wc = (d.week_cd || '').toString().trim();
-                                if (!wc) return;
-                                weekDateMap[wc] = { start_ymd: (d.start_ymd || '').toString().trim(), end_ymd: (d.end_ymd || '').toString().trim(), create_ymd: (d.create_ymd || '').toString().trim() };
-                                weekList.push({ week_cd: wc, create_ymd: weekDateMap[wc].create_ymd || weekDateMap[wc].start_ymd || today });
-                            });
-                            return Promise.all([Promise.resolve(weekList), db.collection('bta_student_score').where('semester_cd', '==', semesterCd).where('userid', '==', userid).get()]);
-                        });
+                        .where('userid', '==', userid)
+                        .get()]);
                 })
                 .then(function(arr) {
                     var weekList = arr[0];
@@ -323,7 +305,11 @@
                         if (!wc) return;
                         var createYmd = (d.create_ymd || today).toString().trim();
                         if (createYmd.length !== 8) createYmd = today;
-                        scoreByWeek[wc] = { create_ymd: createYmd, task_score: d.task_score != null && d.task_score !== '' ? (isNaN(Number(d.task_score)) ? null : Number(d.task_score)) : null, bible_mark: d.bible_mark };
+                        scoreByWeek[wc] = {
+                            create_ymd: createYmd,
+                            task_score: d.task_score != null && d.task_score !== '' ? (isNaN(Number(d.task_score)) ? null : Number(d.task_score)) : null,
+                            bible_mark: d.bible_mark
+                        };
                     });
                     var rows = weekList.map(function(w) {
                         var sc = scoreByWeek[w.week_cd] || {};
@@ -337,6 +323,7 @@
                         };
                     });
                     var sortPromises = rows.map(function(r) {
+                        if (!r.week_cd || !r.create_ymd) return Promise.resolve({ row: r, sortVal: 0 });
                         return getLookupValueSort(db, '230', r.week_cd, r.create_ymd)
                             .then(function(s) { return { row: r, sortVal: (s != null) ? s : 0 }; })
                             .catch(function() { return { row: r, sortVal: 0 }; });
@@ -351,6 +338,7 @@
                     });
                     var rowPromises = withSort.map(function(p) {
                         var r = p.row;
+                        if (!r.week_cd) return Promise.resolve({ week_nm: '주차 없음', week_cd: r.week_cd, create_ymd: r.create_ymd, task_score: r.task_score, bible_mark: r.bible_mark, userid: r.userid, name: r.name });
                         var ymd = r.create_ymd && r.create_ymd.length === 8 ? r.create_ymd : today;
                         var rangeInfo = weekDateMap[r.week_cd];
                         var rangeStr = (rangeInfo && rangeInfo.start_ymd && rangeInfo.end_ymd) ? ' (' + formatYmdToDate(rangeInfo.start_ymd) + ' ~ ' + formatYmdToDate(rangeInfo.end_ymd) + ')' : '';
@@ -368,12 +356,11 @@
                 })
                 .catch(function(err) {
                     console.error('과제제출확인 조회 오류:', err);
-                    if (err && err.message === '학생의 반 정보를 찾을 수 없습니다.') alert('학생의 반 정보를 찾을 수 없습니다.');
-                    else alert('조회 중 오류가 발생했습니다.');
+                    alert('조회 중 오류가 발생했습니다.');
                 });
         }
 
-        var parentColumnDefs = [
+        var studentColumnDefs = [
             { headerName: '순서', width: 70, valueGetter: function(p) { return p.node ? p.node.rowIndex + 1 : 0; }, sortable: false },
             { field: 'week_nm', headerName: '주차', width: 290, sortable: false, cellStyle: { textAlign: 'left' } },
             {
@@ -398,7 +385,7 @@
         ];
 
         var gridOptions = {
-            columnDefs: parentColumnDefs,
+            columnDefs: studentColumnDefs,
             defaultColDef: { resizable: true },
             rowData: [],
             domLayout: 'normal',
@@ -408,17 +395,17 @@
                 var btn = event.event.target.closest ? event.event.target.closest('.create-btn') : null;
                 if (!btn) return;
                 var semester = document.getElementById('searchSemester').value;
-                var classCd = parentSelectedClassCd;
-                if (!semester || !classCd) {
-                    alert('학기·반 정보를 확인할 수 없습니다. 조회 후 다시 시도해주세요.');
+                var cls = document.getElementById('searchClass').value;
+                if (!semester || !cls) {
+                    alert('학기, 반을 선택한 후 조회해주세요.');
                     return;
                 }
                 var row = event.data;
                 if (!row) return;
                 if (event.colDef.headerName === '기록과제물') {
-                    openRecordTaskModal(semester, classCd, row.week_cd || '', row.userid || '', row.name || '');
+                    openRecordTaskModal(semester, cls, row.week_cd || '', row.userid || '', row.name || '');
                 } else if (event.colDef.headerName === '과제수행도') {
-                    openPerformanceModal(semester, classCd, row.week_cd || '', row.userid || '', row.name || '');
+                    openPerformanceModal(semester, cls, row.week_cd || '', row.userid || '', row.name || '');
                 }
             }
         };
@@ -524,15 +511,6 @@
             performanceContext = { semesterCd: semesterCd, classCd: classCd, weekCd: weekCd, userid: userid, studentName: studentName };
             var nameEl = document.getElementById('performanceModalStudentName');
             if (nameEl) nameEl.textContent = '(성명 : ' + (studentName || '') + ')';
-            var saveBtn = document.getElementById('performanceSaveButton');
-            var tempBtn = document.getElementById('performanceTempSaveButton');
-            if (currentUserType === '120') {
-                if (saveBtn) saveBtn.style.display = 'none';
-                if (tempBtn) tempBtn.style.display = 'none';
-            } else {
-                if (saveBtn) saveBtn.style.display = '';
-                if (tempBtn) tempBtn.style.display = '';
-            }
             document.getElementById('performanceModal').style.display = 'block';
             loadPerformanceData(semesterCd, classCd, weekCd, userid, studentName);
         }
@@ -583,8 +561,9 @@
                     alert('저장되었습니다.');
                     closePerformanceModal();
                     var semester = document.getElementById('searchSemester').value;
+                    var cls = document.getElementById('searchClass').value;
                     var student = document.getElementById('searchStudent').value;
-                    if (semester && student) loadAssignmentSubmitDataParent(semester, student);
+                    if (semester && cls && student) loadAssignmentSubmitDataStudent(semester, cls, student);
                 })
                 .catch(function(err) { console.error(err); alert('저장 중 오류가 발생했습니다.'); });
         }
@@ -604,15 +583,6 @@
             document.getElementById('recordTaskSaveButton').addEventListener('click', saveRecordTaskData);
             document.getElementById('recordTaskTempSaveButton').addEventListener('click', saveRecordTaskDataTemp);
             document.getElementById('recordTaskCancelButton').addEventListener('click', closeRecordTaskModal);
-            var saveBtn = document.getElementById('recordTaskSaveButton');
-            var tempBtn = document.getElementById('recordTaskTempSaveButton');
-            if (currentUserType === '120') {
-                if (saveBtn) saveBtn.style.display = 'none';
-                if (tempBtn) tempBtn.style.display = 'none';
-            } else {
-                if (saveBtn) saveBtn.style.display = '';
-                if (tempBtn) tempBtn.style.display = '';
-            }
             loadRecordTaskData(semesterCd, classCd, weekCd, userid);
             document.getElementById('recordTaskModal').style.display = 'block';
         }
@@ -684,8 +654,9 @@
                     alert('제출되었습니다.');
                     closeRecordTaskModal();
                     var semester = document.getElementById('searchSemester').value;
+                    var cls = document.getElementById('searchClass').value;
                     var student = document.getElementById('searchStudent').value;
-                    if (semester && student) loadAssignmentSubmitDataParent(semester, student);
+                    if (semester && cls && student) loadAssignmentSubmitDataStudent(semester, cls, student);
                 })
                 .catch(function(err) { console.error(err); alert('제출 중 오류가 발생했습니다.'); });
         }
@@ -731,32 +702,42 @@
             document.getElementById('searchButton').addEventListener('click', function() {
                 if (!validateSearchCondition()) return;
                 var semester = document.getElementById('searchSemester').value;
+                var cls = document.getElementById('searchClass').value;
                 var student = document.getElementById('searchStudent').value;
-                loadAssignmentSubmitDataParent(semester, student);
+                loadAssignmentSubmitDataStudent(semester, cls, student);
             });
 
             document.getElementById('searchSemester').addEventListener('change', function() {
                 var v = this.value;
-                if (v) loadStudentOptions(v);
-                else {
-                    document.getElementById('searchStudent').innerHTML = '';
-                    document.getElementById('searchStudent').disabled = true;
-                }
+                document.getElementById('searchClass').innerHTML = '';
+                document.getElementById('searchClass').disabled = true;
+                if (v) loadClassOptions(v);
             });
+
+            // 학생방: 반 선택 시 재조회하지 않음. 조회는 '조회' 버튼 클릭 시에만 수행.
         });
 
         auth.onAuthStateChanged(function(user) {
             if (!user) {
-                window.location.href = '../../login.html';
+                window.location.href = '/login';
                 return;
             }
-            db.collection('bta_users').doc(user.uid).get()
-                .then(function(doc) {
-                    if (doc.exists && doc.data()) currentUserType = (doc.data().user_type || '').toString().trim();
-                    else currentUserType = '';
-                })
-                .catch(function() { currentUserType = ''; })
-                .then(function() { return loadSemesterOptions(); });
+            loadSemesterOptions().then(function() {
+                return db.collection('bta_users').doc(user.uid).get();
+            }).then(function(doc) {
+                var studentSel = document.getElementById('searchStudent');
+                studentSel.innerHTML = '';
+                var name = (doc.exists && doc.data() && doc.data().name) ? (doc.data().name || '').toString().trim() : (user.displayName || user.uid);
+                var opt = document.createElement('option');
+                opt.value = user.uid;
+                opt.textContent = name || user.uid;
+                studentSel.appendChild(opt);
+                studentSel.disabled = true;
+            }).catch(function(err) {
+                console.error('학생 정보 로드 오류:', err);
+                var studentSel = document.getElementById('searchStudent');
+                studentSel.innerHTML = '<option value="">선택하세요</option>';
+            });
         });
     </script>
 </body>

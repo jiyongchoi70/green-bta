@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조직도 관리 - BTA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='organization.css') }}">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='common_code_util.js') }}"></script>
+</head>
+<body>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.api_key if firebase_config else '' }}",
+            projectId: "{{ firebase_config.project_id if firebase_config else '' }}",
+            storageBucket: "{{ firebase_config.storage_bucket if firebase_config else '' }}"
+        };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <div class="announcements-header">
+            <h1 class="page-title">조직도 관리</h1>
+            <a href="/" class="home-button">홈</a>
+        </div>
+        
+        <div class="organization-container">
+            <div class="tree-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>조직도</h2>
+                    <div class="header-buttons">
+                        <button id="printOrgButton" class="action-button" title="인쇄">🖨️ 인쇄</button>
+                        <button id="exportPdfButton" class="action-button" title="PDF 내보내기">📄 PDF</button>
+                        <button id="addOrgButton" class="add-button">+</button>
+                    </div>
+                </div>
+                
+                <!-- 뷰 전환 탭 -->
+                <div class="view-tabs">
+                    <button class="tab-button active" data-view="table">📋 테이블 뷰</button>
+                    <button class="tab-button" data-view="chart">🎨 조직도 뷰</button>
+                </div>
+                
+                <!-- 테이블 뷰 -->
+                <div id="tableView" class="view-container">
+                    <div id="orgTreeGrid" class="ag-theme-alpine"></div>
+                </div>
+                
+                <!-- 조직도 뷰 -->
+                <div id="chartView" class="view-container" style="display: none;">
+                    <div id="orgChartContainer" class="org-chart-container"></div>
+                </div>
+            </div>
+            
+            <div class="detail-section">
+                <div class="section-header">
+                    <span class="section-icon">■</span>
+                    <h2>소속 인원</h2>
+                </div>
+                <div id="orgMemberGrid" class="ag-theme-alpine"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 조직 등록/수정 모달 -->
+    <div id="orgModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="orgModalTitle">조직 등록</h3>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <table class="modal-form">
+                    <tr>
+                        <td><span class="required-field">*</span> 조직명</td>
+                        <td>
+                            <input type="text" id="modalOrgName" class="modal-input" maxlength="50">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>상위조직</td>
+                        <td>
+                            <select id="modalParentOrg" class="modal-select">
+                                <option value="">최상위 조직</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 조직유형</td>
+                        <td>
+                            <select id="modalOrgType" class="modal-select">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="required-field">*</span> 순서</td>
+                        <td>
+                            <input type="number" id="modalOrgOrder" class="modal-input" min="1" step="1" value="1">
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="saveOrgButton" class="save-button">저장</button>
+                <button id="cancelOrgButton" class="cancel-button">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        
+        let treeGridApi;
+        let memberGridApi;
+        let isEditMode = false;
+        let editingOrgId = null;
+        let selectedOrgId = null;
+        let allOrganizations = [];
+        
+        // 현재 날짜 (YYYYMMDD)
+        function getCurrentDateYmd() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+        
+        // 공통코드 로드
+        function loadCommonCodes() {
+            const currentDate = getCurrentDateYmd();
+            
+            // 조직유형 로드
+            db.collection('bta_lookup_value')
+                .where('type_cd', '==', 'ORG_TYPE')
+                .where('start_ymd', '<=', currentDate)
+                .where('end_ymd', '>=', currentDate)
+                .orderBy('start_ymd')
+                .orderBy('sort')
+                .get()
+                .then(function(querySnapshot) {
+                    const select = document.getElementById('modalOrgType');
+                    select.innerHTML = '<option value="">선택하세요</option>';
+                    querySnapshot.forEach(function(doc) {
+                        const data = doc.data();
+                        const option = document.createElement('option');
+                        option.value = data.value_cd;
+                        option.textContent = data.value_nm;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(function(error) {
+                    console.error('공통코드 로드 오류:', error);
+                });
+        }
+        
+        // 조직 트리 데이터 로드
+        function loadOrganizations() {
+            db.collection('bta_organization')
+                .orderBy('level')
+                .orderBy('order')
+                .get()
+                .then(function(querySnapshot) {
+                    allOrganizations = [];
+                    querySnapshot.forEach(function(doc) {
+                        allOrganizations.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    
+                    console.log('로드된 조직 데이터:', allOrganizations);
+                    
+                    // 조직 맵 생성
+                    const orgMap = {};
+                    allOrganizations.forEach(function(org) {
+                        orgMap[org.id] = org;
+                    });
+                    
+                    // 각 조직에 계층 경로 추가
+                    allOrganizations.forEach(function(org) {
+                        const path = [];
+                        let current = org;
+                        
+                        // 최대 10단계까지만 (무한 루프 방지)
+                        let depth = 0;
+                        while (current && depth < 10) {
+                            path.unshift(current.name);  // ID 대신 name 사용
+                            if (current.parent_id && orgMap[current.parent_id]) {
+                                current = orgMap[current.parent_id];
+                            } else {
+                                break;
+                            }
+                            depth++;
+                        }
+                        
+                        org.orgPath = path;
+                        console.log(`조직: ${org.name}, 경로:`, path);
+                    });
+                    
+                    console.log('경로가 추가된 조직 데이터:', allOrganizations);
+                    
+                    // 계층 구조 순서로 정렬 (부모 먼저, 그 다음 자식들)
+                    const sortedOrgs = sortOrganizationsHierarchically(allOrganizations);
+                    
+                    // Flat 데이터를 직접 전달
+                    treeGridApi.setRowData(sortedOrgs);
+                    
+                    // 상위 조직 선택 박스 업데이트
+                    updateParentOrgSelect();
+                })
+                .catch(function(error) {
+                    console.error('조직 데이터 로드 오류:', error);
+                    alert('조직 데이터 로드 중 오류가 발생했습니다.');
+                });
+        }
+        
+        // 트리 구조 생성
+        function buildTreeData(flatData) {
+            const map = {};
+            const roots = [];
+            
+            // ID로 맵 생성
+            flatData.forEach(function(item) {
+                map[item.id] = { ...item, children: [] };
+            });
+            
+            // 계층 구조 생성
+            flatData.forEach(function(item) {
+                if (!item.parent_id || item.parent_id === '') {
+                    roots.push(map[item.id]);
+                } else {
+                    if (map[item.parent_id]) {
+                        map[item.parent_id].children.push(map[item.id]);
+                    } else {
+                        // 부모가 없으면 루트로 추가
+                        roots.push(map[item.id]);
+                    }
+                }
+            });
+            
+            return roots;
+        }
+        
+        // 계층 구조 순서로 정렬 (부모 → 자식 순서)
+        function sortOrganizationsHierarchically(orgs) {
+            const result = [];
+            const orgMap = {};
+            
+            orgs.forEach(org => {
+                orgMap[org.id] = org;
+            });
+            
+            // 재귀 함수로 계층 순서 생성
+            function addOrgAndChildren(org) {
+                result.push(org);
+                
+                // 자식 조직 찾기
+                const children = orgs.filter(o => o.parent_id === org.id)
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+                
+                children.forEach(child => {
+                    addOrgAndChildren(child);
+                });
+            }
+            
+            // 최상위 조직부터 시작
+            const roots = orgs.filter(org => !org.parent_id || org.parent_id === '')
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+            
+            roots.forEach(root => {
+                addOrgAndChildren(root);
+            });
+            
+            return result;
+        }
+        
+        // 접기/펴기 토글 함수
+        function toggleOrgChildren(orgId) {
+            // 전체 데이터에서 해당 조직 찾기
+            const targetOrg = allOrganizations.find(org => org.id === orgId);
+            if (!targetOrg) return;
+            
+            // 상태 토글
+            targetOrg.isExpanded = !targetOrg.isExpanded;
+            
+            // 표시할 조직 목록 생성
+            const visibleOrgs = getVisibleOrganizations();
+            
+            // 계층 순서로 정렬
+            const sortedOrgs = sortOrganizationsHierarchically(visibleOrgs);
+            
+            // 그리드 업데이트
+            treeGridApi.setRowData(sortedOrgs);
+        }
+        
+        // 표시할 조직 목록 가져오기
+        function getVisibleOrganizations() {
+            const visible = [];
+            
+            // 조직 맵 생성
+            const orgMap = {};
+            allOrganizations.forEach(org => {
+                orgMap[org.id] = org;
+            });
+            
+            // 각 조직이 표시되어야 하는지 확인
+            allOrganizations.forEach(org => {
+                // 최상위 조직은 항상 표시
+                if (!org.parent_id || org.parent_id === '') {
+                    visible.push(org);
+                    return;
+                }
+                
+                // 부모 조직들이 모두 펼쳐져 있는지 확인
+                let current = org;
+                let shouldShow = true;
+                
+                while (current.parent_id && orgMap[current.parent_id]) {
+                    const parent = orgMap[current.parent_id];
+                    if (parent.isExpanded === false) {
+                        shouldShow = false;
+                        break;
+                    }
+                    current = parent;
+                }
+                
+                if (shouldShow) {
+                    visible.push(org);
+                }
+            });
+            
+            return visible;
+        }
+        
+        // 모든 하위 조직 ID 가져오기 (재귀)
+        function getAllChildOrgIds(parentId, orgs) {
+            const childIds = [];
+            
+            function findChildren(pid) {
+                orgs.forEach(org => {
+                    if (org.parent_id === pid) {
+                        childIds.push(org.id);
+                        findChildren(org.id);  // 재귀적으로 하위 조직 찾기
+                    }
+                });
+            }
+            
+            findChildren(parentId);
+            return childIds;
+        }
+        
+        // 조직 이동 (드래그 앤 드롭)
+        function moveOrganization(draggedId, targetId) {
+            const draggedOrg = allOrganizations.find(org => org.id === draggedId);
+            const targetOrg = allOrganizations.find(org => org.id === targetId);
+            
+            if (!draggedOrg || !targetOrg) {
+                alert('조직을 찾을 수 없습니다.');
+                return;
+            }
+            
+            // 자기 자신에게 이동 불가
+            if (draggedId === targetId) {
+                alert('자기 자신에게는 이동할 수 없습니다.');
+                return;
+            }
+            
+            // 하위 조직으로 이동 불가 (순환 참조 방지)
+            const childIds = getAllChildOrgIds(draggedId, allOrganizations);
+            if (childIds.includes(targetId)) {
+                alert('하위 조직으로는 이동할 수 없습니다.');
+                return;
+            }
+            
+            // 확인 메시지
+            if (!confirm(`"${draggedOrg.name}"을(를) "${targetOrg.name}"의 하위 조직으로 이동하시겠습니까?`)) {
+                return;
+            }
+            
+            // 새로운 레벨 계산
+            const newLevel = (targetOrg.level || 0) + 1;
+            const levelDiff = newLevel - (draggedOrg.level || 0);
+            
+            // Firestore 업데이트
+            const batch = db.batch();
+            
+            // 드래그된 조직 업데이트
+            const draggedRef = db.collection('bta_organization').doc(draggedId);
+            batch.update(draggedRef, {
+                parent_id: targetId,
+                level: newLevel,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // 하위 조직들의 레벨도 업데이트
+            childIds.forEach(childId => {
+                const child = allOrganizations.find(org => org.id === childId);
+                if (child) {
+                    const childRef = db.collection('bta_organization').doc(childId);
+                    batch.update(childRef, {
+                        level: (child.level || 0) + levelDiff,
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            });
+            
+            batch.commit()
+                .then(function() {
+                    alert('조직이 이동되었습니다.');
+                    loadOrganizations();
+                })
+                .catch(function(error) {
+                    console.error('조직 이동 오류:', error);
+                    alert('조직 이동 중 오류가 발생했습니다.');
+                });
+        }
+        
+        // 상위 조직 선택 박스 업데이트
+        function updateParentOrgSelect() {
+            const select = document.getElementById('modalParentOrg');
+            select.innerHTML = '<option value="">최상위 조직</option>';
+            
+            allOrganizations.forEach(function(org) {
+                if (editingOrgId && org.id === editingOrgId) {
+                    return; // 자기 자신은 제외
+                }
+                const option = document.createElement('option');
+                option.value = org.id;
+                
+                // 레벨에 따라 들여쓰기
+                const indent = '　'.repeat(org.level || 0);
+                option.textContent = indent + org.name;
+                select.appendChild(option);
+            });
+        }
+        
+        // 조직 트리 그리드 설정
+        const treeColumnDefs = [
+            {
+                field: 'name',
+                headerName: '조직명',
+                minWidth: 300,
+                cellRenderer: function(params) {
+                    const level = params.data.level || 0;
+                    const indent = '　'.repeat(level * 2);  // 레벨당 2칸 들여쓰기
+                    
+                    // 하위 조직이 있는지 확인
+                    const hasChildren = allOrganizations.some(org => org.parent_id === params.data.id);
+                    
+                    let icon = '';
+                    if (hasChildren) {
+                        // 접기/펴기 아이콘
+                        const isExpanded = params.data.isExpanded !== false;  // 기본값 펼쳐진 상태
+                        icon = `<span class="tree-toggle" data-org-id="${params.data.id}" style="cursor: pointer; margin-right: 5px;">${isExpanded ? '▼' : '▶'}</span>`;
+                    } else if (level > 0) {
+                        icon = '<span style="margin-right: 5px;">└</span>';
+                    }
+                    
+                    // 드래그 가능한 요소로 만들기
+                    return `<div class="org-drag-item" draggable="true" data-org-id="${params.data.id}" style="cursor: move;">
+                        ${indent}${icon}<span class="org-name">${params.value}</span>
+                    </div>`;
+                }
+            },
+            {
+                field: 'type_nm',
+                headerName: '유형',
+                width: 100
+            },
+            {
+                field: 'level',
+                headerName: '레벨',
+                width: 80
+            },
+            {
+                headerName: '수정',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="edit-btn">수정</button>';
+                },
+                onCellClicked: function(params) {
+                    openEditOrgModal(params.data);
+                }
+            },
+            {
+                headerName: '삭제',
+                width: 80,
+                cellRenderer: function(params) {
+                    return '<button class="delete-btn">삭제</button>';
+                },
+                onCellClicked: function(params) {
+                    deleteOrganization(params.data);
+                }
+            }
+        ];
+        
+        const treeGridOptions = {
+            columnDefs: treeColumnDefs,
+            defaultColDef: {
+                resizable: true
+            },
+            onRowClicked: function(event) {
+                selectedOrgId = event.data.id;
+                loadOrgMembers(selectedOrgId);
+            },
+            domLayout: 'normal'
+        };
+        
+        // 소속 인원 그리드 설정
+        const memberColumnDefs = [
+            {
+                headerName: '순서',
+                width: 60,
+                valueGetter: function(params) {
+                    return params.node ? params.node.rowIndex + 1 : '';
+                }
+            },
+            { field: 'user_name', headerName: '성명', width: 100 },
+            { field: 'position_nm', headerName: '직책', width: 100 },
+            { field: 'start_date', headerName: '발령일', width: 120 },
+            { field: 'end_date', headerName: '전출일', width: 120 }
+        ];
+        
+        const memberGridOptions = {
+            columnDefs: memberColumnDefs,
+            defaultColDef: {
+                resizable: true
+            },
+            rowData: [],
+            domLayout: 'normal'
+        };
+        
+        // 그리드 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            treeGridApi = agGrid.createGrid(document.querySelector('#orgTreeGrid'), treeGridOptions);
+            memberGridApi = agGrid.createGrid(document.querySelector('#orgMemberGrid'), memberGridOptions);
+            
+            const gridElement = document.querySelector('#orgTreeGrid');
+            
+            // 접기/펴기 이벤트 리스너
+            gridElement.addEventListener('click', function(e) {
+                if (e.target.classList.contains('tree-toggle')) {
+                    const orgId = e.target.getAttribute('data-org-id');
+                    toggleOrgChildren(orgId);
+                }
+            });
+            
+            // 드래그 앤 드롭 이벤트 리스너
+            let draggedOrgId = null;
+            
+            gridElement.addEventListener('dragstart', function(e) {
+                if (e.target.classList.contains('org-drag-item')) {
+                    draggedOrgId = e.target.getAttribute('data-org-id');
+                    e.target.style.opacity = '0.5';
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/html', e.target.innerHTML);
+                }
+            });
+            
+            gridElement.addEventListener('dragend', function(e) {
+                if (e.target.classList.contains('org-drag-item')) {
+                    e.target.style.opacity = '1';
+                }
+            });
+            
+            gridElement.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                // 드롭 대상 하이라이트
+                const target = e.target.closest('.org-drag-item');
+                if (target) {
+                    target.style.backgroundColor = '#e3f2fd';
+                }
+            });
+            
+            gridElement.addEventListener('dragleave', function(e) {
+                const target = e.target.closest('.org-drag-item');
+                if (target) {
+                    target.style.backgroundColor = '';
+                }
+            });
+            
+            gridElement.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const target = e.target.closest('.org-drag-item');
+                if (target) {
+                    target.style.backgroundColor = '';
+                    const targetOrgId = target.getAttribute('data-org-id');
+                    
+                    if (draggedOrgId && targetOrgId && draggedOrgId !== targetOrgId) {
+                        moveOrganization(draggedOrgId, targetOrgId);
+                    }
+                }
+                
+                draggedOrgId = null;
+            });
+            
+            loadCommonCodes();
+            loadOrganizations();
+            
+            // 모달 이벤트
+            const modal = document.getElementById('orgModal');
+            const closeBtn = modal.querySelector('.close-button');
+            const addBtn = document.getElementById('addOrgButton');
+            const saveBtn = document.getElementById('saveOrgButton');
+            const cancelBtn = document.getElementById('cancelOrgButton');
+            
+            addBtn.addEventListener('click', function() {
+                openAddOrgModal();
+            });
+            
+            closeBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+            
+            saveBtn.addEventListener('click', function() {
+                saveOrganization();
+            });
+            
+            window.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+        
+        // 조직 추가 모달 열기
+        function openAddOrgModal() {
+            isEditMode = false;
+            editingOrgId = null;
+            
+            document.getElementById('orgModalTitle').textContent = '조직 등록';
+            document.getElementById('modalOrgName').value = '';
+            document.getElementById('modalParentOrg').value = '';
+            document.getElementById('modalOrgType').value = '';
+            document.getElementById('modalOrgOrder').value = '1';
+            
+            updateParentOrgSelect();
+            document.getElementById('orgModal').style.display = 'block';
+        }
+        
+        // 조직 수정 모달 열기
+        function openEditOrgModal(orgData) {
+            isEditMode = true;
+            editingOrgId = orgData.id;
+            
+            document.getElementById('orgModalTitle').textContent = '조직 수정';
+            document.getElementById('modalOrgName').value = orgData.name || '';
+            document.getElementById('modalParentOrg').value = orgData.parent_id || '';
+            document.getElementById('modalOrgType').value = orgData.type || '';
+            document.getElementById('modalOrgOrder').value = orgData.order || 1;
+            
+            updateParentOrgSelect();
+            document.getElementById('orgModal').style.display = 'block';
+        }
+        
+        // 조직 저장
+        function saveOrganization() {
+            const name = document.getElementById('modalOrgName').value.trim();
+            const parentId = document.getElementById('modalParentOrg').value;
+            const type = document.getElementById('modalOrgType').value;
+            const order = parseInt(document.getElementById('modalOrgOrder').value);
+            
+            if (!name) {
+                alert('조직명을 입력하세요.');
+                return;
+            }
+            
+            if (!type) {
+                alert('조직유형을 선택하세요.');
+                return;
+            }
+            
+            // 레벨 계산
+            let level = 0;
+            if (parentId) {
+                const parent = allOrganizations.find(org => org.id === parentId);
+                if (parent) {
+                    level = (parent.level || 0) + 1;
+                }
+            }
+            
+            // 조직유형명 가져오기
+            const typeSelect = document.getElementById('modalOrgType');
+            const typeName = typeSelect.options[typeSelect.selectedIndex].text;
+            
+            const orgData = {
+                name: name,
+                parent_id: parentId || null,
+                type: type,
+                type_nm: typeName,
+                level: level,
+                order: order,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            if (isEditMode && editingOrgId) {
+                // 수정
+                db.collection('bta_organization').doc(editingOrgId)
+                    .update(orgData)
+                    .then(function() {
+                        alert('조직이 수정되었습니다.');
+                        document.getElementById('orgModal').style.display = 'none';
+                        loadOrganizations();
+                    })
+                    .catch(function(error) {
+                        console.error('조직 수정 오류:', error);
+                        alert('조직 수정 중 오류가 발생했습니다.');
+                    });
+            } else {
+                // 추가
+                orgData.created_at = firebase.firestore.FieldValue.serverTimestamp();
+                
+                db.collection('bta_organization')
+                    .add(orgData)
+                    .then(function() {
+                        alert('조직이 추가되었습니다.');
+                        document.getElementById('orgModal').style.display = 'none';
+                        loadOrganizations();
+                    })
+                    .catch(function(error) {
+                        console.error('조직 추가 오류:', error);
+                        alert('조직 추가 중 오류가 발생했습니다.');
+                    });
+            }
+        }
+        
+        // 조직 삭제
+        function deleteOrganization(orgData) {
+            // 하위 조직 확인
+            const hasChildren = allOrganizations.some(org => org.parent_id === orgData.id);
+            if (hasChildren) {
+                alert('하위 조직이 있어 삭제할 수 없습니다.\n먼저 하위 조직을 삭제하세요.');
+                return;
+            }
+            
+            if (!confirm(`"${orgData.name}" 조직을 삭제하시겠습니까?`)) {
+                return;
+            }
+            
+            // 소속 인원 확인
+            db.collection('bta_user_assignment')
+                .where('org_id', '==', orgData.id)
+                .where('end_date', '==', null)
+                .get()
+                .then(function(querySnapshot) {
+                    if (!querySnapshot.empty) {
+                        alert('소속된 인원이 있어 삭제할 수 없습니다.\n먼저 소속 인원을 전출하세요.');
+                        return;
+                    }
+                    
+                    // 삭제 실행
+                    return db.collection('bta_organization').doc(orgData.id).delete();
+                })
+                .then(function() {
+                    if (arguments.length > 0) {
+                        alert('조직이 삭제되었습니다.');
+                        loadOrganizations();
+                        
+                        if (selectedOrgId === orgData.id) {
+                            selectedOrgId = null;
+                            memberGridApi.setRowData([]);
+                        }
+                    }
+                })
+                .catch(function(error) {
+                    console.error('조직 삭제 오류:', error);
+                    alert('조직 삭제 중 오류가 발생했습니다.');
+                });
+        }
+        
+        // 소속 인원 로드
+        function loadOrgMembers(orgId) {
+            db.collection('bta_user_assignment')
+                .where('org_id', '==', orgId)
+                .orderBy('start_date', 'desc')
+                .get()
+                .then(function(querySnapshot) {
+                    const members = [];
+                    querySnapshot.forEach(function(doc) {
+                        members.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    memberGridApi.setRowData(members);
+                })
+                .catch(function(error) {
+                    console.error('소속 인원 로드 오류:', error);
+                    memberGridApi.setRowData([]);
+                });
+        }
+        
+        // 인쇄 기능
+        function printOrganization() {
+            // 인쇄용 HTML 생성
+            const printWindow = window.open('', '_blank');
+            const printContent = generatePrintableOrgChart();
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="ko">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>조직도 - BTA</title>
+                    <style>
+                        @media print {
+                            @page {
+                                size: A4 landscape;
+                                margin: 15mm;
+                            }
+                            body {
+                                -webkit-print-color-adjust: exact;
+                                print-color-adjust: exact;
+                            }
+                        }
+                        body {
+                            font-family: 'Malgun Gothic', sans-serif;
+                            padding: 20px;
+                            background: white;
+                        }
+                        .print-header {
+                            text-align: center;
+                            margin-bottom: 30px;
+                            border-bottom: 2px solid #2563eb;
+                            padding-bottom: 15px;
+                        }
+                        .print-header h1 {
+                            margin: 0;
+                            color: #1e40af;
+                            font-size: 28px;
+                        }
+                        .print-date {
+                            text-align: right;
+                            color: #6b7280;
+                            font-size: 12px;
+                            margin-top: 5px;
+                        }
+                        .org-tree {
+                            margin: 20px 0;
+                        }
+                        .org-item {
+                            padding: 8px 12px;
+                            margin: 4px 0;
+                            border-left: 3px solid #2563eb;
+                            background: #f8fafc;
+                        }
+                        .org-level-0 {
+                            background: #dbeafe;
+                            font-weight: bold;
+                            font-size: 16px;
+                            border-left-width: 5px;
+                        }
+                        .org-level-1 {
+                            margin-left: 30px;
+                            background: #e0f2fe;
+                        }
+                        .org-level-2 {
+                            margin-left: 60px;
+                            background: #f0f9ff;
+                        }
+                        .org-level-3 {
+                            margin-left: 90px;
+                        }
+                        .org-level-4 {
+                            margin-left: 120px;
+                        }
+                        .org-name {
+                            font-weight: 600;
+                            color: #1e40af;
+                        }
+                        .org-type {
+                            display: inline-block;
+                            padding: 2px 8px;
+                            background: #2563eb;
+                            color: white;
+                            border-radius: 4px;
+                            font-size: 11px;
+                            margin-left: 10px;
+                        }
+                        .org-stats {
+                            color: #6b7280;
+                            font-size: 12px;
+                            margin-left: 10px;
+                        }
+                        .print-footer {
+                            margin-top: 30px;
+                            text-align: center;
+                            color: #9ca3af;
+                            font-size: 11px;
+                            border-top: 1px solid #e5e7eb;
+                            padding-top: 10px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="print-header">
+                        <h1>🏢 조직도</h1>
+                        <div class="print-date">출력일: ${new Date().toLocaleDateString('ko-KR')}</div>
+                    </div>
+                    <div class="org-tree">
+                        ${printContent}
+                    </div>
+                    <div class="print-footer">
+                        BTA School Management System
+                    </div>
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            
+            // 로드 후 인쇄 대화상자 열기
+            printWindow.onload = function() {
+                printWindow.focus();
+                printWindow.print();
+            };
+        }
+        
+        // 인쇄용 조직도 HTML 생성
+        function generatePrintableOrgChart() {
+            let html = '';
+            
+            // 최상위 조직부터 시작
+            const rootOrgs = allOrganizations
+                .filter(org => !org.parent_id || org.parent_id === '')
+                .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            
+            rootOrgs.forEach(org => {
+                html += generateOrgItemHtml(org);
+            });
+            
+            return html;
+        }
+        
+        // 조직 아이템 HTML 생성 (재귀)
+        function generateOrgItemHtml(org) {
+            const level = org.level || 0;
+            const children = allOrganizations
+                .filter(o => o.parent_id === org.id)
+                .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            
+            let html = `
+                <div class="org-item org-level-${level}">
+                    <span class="org-name">${org.name}</span>
+                    <span class="org-type">${org.type_nm || ''}</span>
+                </div>
+            `;
+            
+            // 하위 조직 재귀적으로 추가
+            children.forEach(child => {
+                html += generateOrgItemHtml(child);
+            });
+            
+            return html;
+        }
+        
+        // PDF 내보내기 기능
+        function exportToPdf() {
+            const printContent = generatePrintableOrgChart();
+            
+            // 임시 div 생성
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.width = '1000px';
+            tempDiv.style.background = 'white';
+            tempDiv.style.padding = '40px';
+            tempDiv.innerHTML = `
+                <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #2563eb; padding-bottom: 15px;">
+                    <h1 style="margin: 0; color: #1e40af; font-size: 28px;">🏢 조직도</h1>
+                    <div style="text-align: right; color: #6b7280; font-size: 12px; margin-top: 5px;">
+                        출력일: ${new Date().toLocaleDateString('ko-KR')}
+                    </div>
+                </div>
+                <div style="font-family: 'Malgun Gothic', sans-serif;">
+                    ${printContent}
+                </div>
+                <div style="margin-top: 30px; text-align: center; color: #9ca3af; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                    BTA School Management System
+                </div>
+            `;
+            
+            // 스타일 추가
+            const style = document.createElement('style');
+            style.textContent = `
+                .org-item {
+                    padding: 8px 12px;
+                    margin: 4px 0;
+                    border-left: 3px solid #2563eb;
+                    background: #f8fafc;
+                }
+                .org-level-0 {
+                    background: #dbeafe;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border-left-width: 5px;
+                }
+                .org-level-1 {
+                    margin-left: 30px;
+                    background: #e0f2fe;
+                }
+                .org-level-2 {
+                    margin-left: 60px;
+                    background: #f0f9ff;
+                }
+                .org-level-3 {
+                    margin-left: 90px;
+                }
+                .org-level-4 {
+                    margin-left: 120px;
+                }
+                .org-name {
+                    font-weight: 600;
+                    color: #1e40af;
+                }
+                .org-type {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    background: #2563eb;
+                    color: white;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    margin-left: 10px;
+                }
+            `;
+            tempDiv.appendChild(style);
+            document.body.appendChild(tempDiv);
+            
+            // html2canvas로 이미지 생성
+            html2canvas(tempDiv, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                logging: false
+            }).then(function(canvas) {
+                // PDF 생성
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'mm', 'a4');
+                
+                const imgWidth = 277; // A4 landscape width (mm)
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                const imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                
+                // 파일명 생성
+                const fileName = `조직도_${new Date().toISOString().split('T')[0]}.pdf`;
+                pdf.save(fileName);
+                
+                // 임시 div 제거
+                document.body.removeChild(tempDiv);
+                
+                alert('PDF 파일이 다운로드되었습니다.');
+            }).catch(function(error) {
+                console.error('PDF 생성 오류:', error);
+                alert('PDF 생성 중 오류가 발생했습니다.');
+                document.body.removeChild(tempDiv);
+            });
+        }
+        
+        // 버튼 이벤트 리스너
+        document.addEventListener('DOMContentLoaded', function() {
+            // 인쇄 버튼
+            document.getElementById('printOrgButton').addEventListener('click', printOrganization);
+            
+            // PDF 내보내기 버튼
+            document.getElementById('exportPdfButton').addEventListener('click', exportToPdf);
+        });
+    </script>
+</body>
+</html>
