@@ -82,6 +82,17 @@ body {
     }
 }
 
+.permission-message {
+    margin: 24px 0;
+    padding: 20px;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    color: #b91c1c;
+    font-size: 16px;
+    text-align: center;
+}
+
 .main-table {
     width: 100%;
     border-collapse: collapse;
