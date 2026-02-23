@@ -21,6 +21,9 @@
             </div>
         </div>
         
+        <div id="permissionMessage" class="permission-message" style="display: none;">
+            권한이 부여 되지 않았습니다. 관리자에게 문의 해주세요.
+        </div>
         <div class="main-table" id="menuTable">
             <!-- 동적으로 생성됨 -->
         </div>
@@ -150,6 +153,20 @@
             }
         }
         
+        function showPermissionMessage() {
+            var msgEl = document.getElementById('permissionMessage');
+            var menuEl = document.getElementById('menuTable');
+            if (msgEl) msgEl.style.display = 'block';
+            if (menuEl) menuEl.style.display = 'none';
+        }
+        
+        function hidePermissionMessage() {
+            var msgEl = document.getElementById('permissionMessage');
+            var menuEl = document.getElementById('menuTable');
+            if (msgEl) msgEl.style.display = 'none';
+            if (menuEl) menuEl.style.display = '';
+        }
+        
         auth.onAuthStateChanged(function(user) {
             if (!user && window.location.pathname === '/') {
                 window.location.href = './login.html';
@@ -157,26 +174,35 @@
                 const userEmailElement = document.getElementById('userEmail');
                 if (userEmailElement) {
                     db.collection('bta_users').doc(user.uid).get().then(function(doc) {
-                        if (doc.exists) {
-                            const userData = doc.data();
-                            userEmailElement.textContent = userData.name || user.email;
-                            
-                            // user_type 확인 후 메뉴 렌더링
-                            // user_type을 문자열로 변환 (숫자로 저장되어 있을 수 있음)
-                            const userType = String(userData.user_type || '');
-                            if (userType) {
-                                renderMenu(userType);
-                            } else {
-                                console.error('user_type을 찾을 수 없습니다. userData:', userData);
-                                // 메뉴를 렌더링하지 않음 (에러 표시)
-                            }
-                        } else {
+                        if (!doc.exists) {
                             userEmailElement.textContent = user.email;
-                            console.error('사용자 데이터를 찾을 수 없습니다.');
+                            showPermissionMessage();
+                            return;
                         }
+                        const userData = doc.data();
+                        userEmailElement.textContent = userData.name || user.email;
+                        
+                        // 1) student_status 먼저 확인: 110, 120이면 권한 없음 → 메시지 표시 후 종료
+                        var studentStatus = String(userData.student_status || '').trim();
+                        if (studentStatus === '110' || studentStatus === '120') {
+                            showPermissionMessage();
+                            return;
+                        }
+                        
+                        // 2) user_type 확인: null 이거나 140이면 권한 없음 → 메시지 표시 후 종료
+                        var userType = String(userData.user_type ?? '').trim();
+                        if (userType === '' || userType === '140') {
+                            showPermissionMessage();
+                            return;
+                        }
+                        
+                        // 권한 있음: 메시지 숨기고 메뉴 렌더링
+                        hidePermissionMessage();
+                        renderMenu(userType);
                     }).catch(function(error) {
                         console.error('사용자 정보 가져오기 오류:', error);
                         userEmailElement.textContent = user.email;
+                        showPermissionMessage();
                     });
                 }
             }

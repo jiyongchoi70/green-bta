@@ -41,11 +41,13 @@
                 <div class="input-group">
                     <span class="input-icon">🔒</span>
                     <input type="password" id="password" placeholder="비밀번호" required minlength="6">
+                    <span class="toggle-password" id="togglePassword" title="비밀번호 보기">👁</span>
                 </div>
                 
                 <div class="input-group">
                     <span class="input-icon">🔒</span>
                     <input type="password" id="confirmPassword" placeholder="비밀번호 확인" required>
+                    <span class="toggle-password" id="toggleConfirmPassword" title="비밀번호 보기">👁</span>
                 </div>
                 
                 <button type="submit" class="login-button">회원가입</button>
@@ -85,6 +87,18 @@
         document.getElementById('phone').addEventListener('input', function(e) {
             const formatted = formatPhoneNumber(e.target.value);
             e.target.value = formatted;
+        });
+        
+        document.getElementById('togglePassword').addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+        });
+        
+        document.getElementById('toggleConfirmPassword').addEventListener('click', function() {
+            const confirmInput = document.getElementById('confirmPassword');
+            const type = confirmInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            confirmInput.setAttribute('type', type);
         });
         
         document.getElementById('signupForm').addEventListener('submit', async function(e) {
