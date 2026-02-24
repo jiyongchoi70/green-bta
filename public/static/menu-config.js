@@ -118,9 +118,17 @@ const MENU_CONFIG = {
             rowIndex: 5,
             link: './menu/system/common-code.html',
             userTypes: ['130']
+        },
+        // 일곱 번째 행
+        {
+            label: 'C/S 요청',
+            column: '관리자',
+            rowIndex: 6,
+            link: './menu/system/customerservice.html',
+            userTypes: ['130']
         }
         
-        // 일곱 번째 행 - 조직도 (숨김)
+        // 여덟 번째 행 - 조직도 (숨김)
         // {
         //     label: '조직도',
         //     column: '관리자',

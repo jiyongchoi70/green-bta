@@ -138,6 +138,30 @@
     overflow-y: auto;
 }
 
+.quill-contents-wrap {
+    min-height: 200px;
+}
+.quill-contents-wrap .ql-container {
+    min-height: 180px;
+    font-size: 14px;
+}
+.quill-contents-wrap .ql-editor {
+    min-height: 180px;
+}
+
+.modal-view-mode .quill-contents-wrap .ql-toolbar {
+    display: none;
+}
+.modal-view-mode .quill-contents-wrap .ql-container {
+    border: none;
+    min-height: 350px;
+}
+.modal-view-mode .quill-contents-wrap .ql-editor {
+    min-height: 350px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
 .edit-btn {
     padding: 5px 10px;
     background-color: #2563eb;
@@ -374,6 +398,7 @@ body.modal-open .modal * {
     min-height: 350px;
     max-height: 500px;
 }
+/* Quill view mode is styled via .modal-view-mode .quill-contents-wrap above */
 
 .modal-view-mode #modalFileRow {
     display: none; /* 파일 선택 행 숨김 */

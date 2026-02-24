@@ -60,7 +60,8 @@ if __name__ == '__main__':
             'parent-registration': '학부모 등록',
             'organization': '조직도',
             'user-assignment': '발령',
-            'organization-chart': '조직도조회'
+            'organization-chart': '조직도조회',
+            'customerservice': 'C/S 요청'
         }
         
         for room_type in room_types:
@@ -88,6 +89,8 @@ if __name__ == '__main__':
                     template_name = 'user_assignment.html'
                 elif menu_item == 'organization-chart' and room_type == 'system':
                     template_name = 'organization_chart.html'
+                elif menu_item == 'customerservice' and room_type == 'system':
+                    template_name = 'customerservice.html'
                 elif menu_item == 'student-select' and room_type == 'coach':
                     template_name = 'coach_assignment_submit.html'
                 elif menu_item == 'assignment-submit' and room_type == 'student':

@@ -150,13 +150,24 @@ body {
 .link {
     color: #2563eb;
     text-decoration: none;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
     transition: color 0.3s;
 }
 
 .link:hover {
     color: #1e40af;
     text-decoration: underline;
+}
+
+.link:hover .link-accent {
+    color: #b91c1c;
+}
+
+.link-accent {
+    color: #dc2626;
+    font-weight: 600;
 }
 
 .error-message {
