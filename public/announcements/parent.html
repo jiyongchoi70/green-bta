@@ -14,6 +14,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-theme-alpine.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     <script src="../static/common_code_util.js"></script>
 </head>
 <body>
@@ -119,7 +121,9 @@
                     <tr>
                         <td>내용</td>
                         <td colspan="3">
-                            <textarea id="modalContents" class="modal-textarea" rows="10" maxlength="5000"></textarea>
+                            <div id="quillContentsWrap" class="quill-contents-wrap">
+                                <div id="modalContents"></div>
+                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -156,12 +160,54 @@
         let attachmentsToDelete = [];
         let newAttachments = [];
         let selectedFiles = []; // 새로 선택한 파일 목록
+        let isSaving = false; // 저장 중복 클릭 방지
         
         let announcementsGridApi = null;
         
         // room_type 확인 (관리자만 편집 가능)
         const roomType = 'parent';
         const isAdmin = roomType === 'system';
+        
+        // Quill 에디터 (내용 필드)
+        let quillEditor = null;
+        if (typeof Quill !== 'undefined') {
+            quillEditor = new Quill('#modalContents', {
+                theme: 'snow',
+                placeholder: '내용을 입력하세요.',
+                modules: {
+                    toolbar: [
+                        [{ header: [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ align: [] }],
+                        ['link'],
+                        ['clean']
+                    ]
+                }
+            });
+        }
+        function setQuillContent(htmlOrText) {
+            if (!quillEditor) return;
+            var s = (htmlOrText || '').trim();
+            if (s.indexOf('<') !== -1) {
+                quillEditor.root.innerHTML = s;
+            } else {
+                quillEditor.setText(s);
+            }
+        }
+        function getQuillContent() {
+            if (!quillEditor) return '';
+            return quillEditor.root.innerHTML.trim();
+        }
+        function setQuillReadOnly(readOnly) {
+            if (!quillEditor) return;
+            quillEditor.enable(!readOnly);
+        }
+        function isQuillEmpty() {
+            if (!quillEditor) return true;
+            var html = quillEditor.root.innerHTML.trim();
+            return !html || html === '<p><br></p>' || html === '<p></p>';
+        }
         
         // 각 방별 대상 필터 설정
         const roomUserTypeFilter = {
@@ -520,7 +566,7 @@
             document.getElementById('modalCreateYmd').value = formatDateYmdToDash(getCurrentDateYmd());
             document.getElementById('modalCreateUser').value = currentUserData ? (currentUserData.name || '') : '';
             document.getElementById('modalAnnouncementTitle').value = '';
-            document.getElementById('modalContents').value = '';
+            setQuillContent('');
             document.getElementById('modalFile').value = '';
             document.getElementById('fileList').innerHTML = '';
             document.getElementById('existingFiles').innerHTML = '';
@@ -531,7 +577,7 @@
             document.getElementById('modalStartYmd').disabled = false;
             document.getElementById('modalEndYmd').disabled = false;
             document.getElementById('modalAnnouncementTitle').readOnly = false;
-            document.getElementById('modalContents').readOnly = false;
+            setQuillReadOnly(false);
             document.getElementById('modalFile').disabled = false;
             
             // 저장 버튼 표시
@@ -587,7 +633,7 @@
                 document.getElementById('modalCreateYmd').value = docData.create_ymd && docData.create_ymd.length === 8 ? formatDateYmdToDash(docData.create_ymd) : '';
                 document.getElementById('modalCreateUser').value = data.create_user_nm || '';
                 document.getElementById('modalAnnouncementTitle').value = docData.title || '';
-                document.getElementById('modalContents').value = docData.contents || '';
+                setQuillContent(docData.contents || '');
                 document.getElementById('modalFile').value = '';
                 document.getElementById('fileList').innerHTML = '';
                 
@@ -597,7 +643,7 @@
                 document.getElementById('modalStartYmd').disabled = true;
                 document.getElementById('modalEndYmd').disabled = true;
                 document.getElementById('modalAnnouncementTitle').readOnly = true;
-                document.getElementById('modalContents').readOnly = true;
+                setQuillReadOnly(true);
                 document.getElementById('modalFile').disabled = true;
                 
                 // 저장 버튼 숨기기
@@ -687,9 +733,13 @@
                 document.getElementById('modalCreateYmd').value = docData.create_ymd && docData.create_ymd.length === 8 ? formatDateYmdToDash(docData.create_ymd) : '';
                 document.getElementById('modalCreateUser').value = data.create_user_nm || '';
                 document.getElementById('modalAnnouncementTitle').value = docData.title || '';
-                document.getElementById('modalContents').value = docData.contents || '';
+                setQuillContent(docData.contents || '');
                 document.getElementById('modalFile').value = '';
                 document.getElementById('fileList').innerHTML = '';
+                
+                // 저장 버튼 표시 (수정 모드)
+                const saveBtn = document.getElementById('saveButton');
+                if (saveBtn) saveBtn.style.display = '';
                 
                 // 초기값 저장 (공통코드 관리 방식 참고)
                 startYmdInitialValue = startYmdValue;
@@ -746,6 +796,7 @@
                 newAttachments = [];
                 selectedFiles = [];
                 
+                setQuillReadOnly(false);
                 document.getElementById('announcementModal').style.display = 'block';
                 document.body.classList.add('modal-open');
                 
@@ -768,6 +819,7 @@
             editDocumentId = null;
             attachmentsToDelete = [];
             newAttachments = [];
+            setSaveButtonEnabled(true);
             
             // 모든 입력 필드 초기화 및 활성화
             document.getElementById('modalNotificationCd').disabled = false;
@@ -775,7 +827,7 @@
             document.getElementById('modalStartYmd').disabled = false;
             document.getElementById('modalEndYmd').disabled = false;
             document.getElementById('modalAnnouncementTitle').readOnly = false;
-            document.getElementById('modalContents').readOnly = false;
+            setQuillReadOnly(false);
             document.getElementById('modalFile').disabled = false;
             
             // 저장 버튼 표시
@@ -798,48 +850,88 @@
             });
         }
         
+        function setSaveButtonEnabled(enabled) {
+            isSaving = !enabled;
+            var btn = document.getElementById('saveButton');
+            if (btn) btn.disabled = !enabled;
+        }
+        
+        function getUtf8ByteLength(str) {
+            if (typeof TextEncoder !== 'undefined') {
+                return new TextEncoder().encode(str || '').length;
+            }
+            var s = str || '';
+            var len = 0;
+            for (var i = 0; i < s.length; i++) {
+                var c = s.charCodeAt(i);
+                len += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+            }
+            return len;
+        }
+        
         function saveAnnouncement() {
+            if (isSaving) return;
+            setSaveButtonEnabled(false);
             const notificationCd = document.getElementById('modalNotificationCd').value;
             const userType = document.getElementById('modalUserType').value;
             const startYmdInput = document.getElementById('modalStartYmd').value;
             const endYmdInput = document.getElementById('modalEndYmd').value;
             const createYmd = formatDateDashToYmd(document.getElementById('modalCreateYmd').value);
             const title = document.getElementById('modalAnnouncementTitle').value.trim();
-            const contents = document.getElementById('modalContents').value.trim();
+            const contents = getQuillContent();
             const fileInput = document.getElementById('modalFile');
             
             // 필수 필드 검증
             if (!notificationCd) {
+                setSaveButtonEnabled(true);
                 alert('구분을 선택하세요.');
                 return;
             }
             if (!userType) {
+                setSaveButtonEnabled(true);
                 alert('대상을 선택하세요.');
                 return;
             }
             if (!startYmdInput) {
+                setSaveButtonEnabled(true);
                 alert('개시일을 입력하세요.');
                 return;
             }
             if (!endYmdInput) {
+                setSaveButtonEnabled(true);
                 alert('종료일을 입력하세요.');
                 return;
             }
             
             // 날짜 검증 (년도 4자리 + 개시일 <= 종료일)
             if (!validateDateRange()) {
-                return; // 검증 실패 시 저장 중단
+                setSaveButtonEnabled(true);
+                return;
             }
             
             const startYmd = formatDateDashToYmd(startYmdInput);
             const endYmd = formatDateDashToYmd(endYmdInput);
             
             if (!title) {
+                setSaveButtonEnabled(true);
                 alert('제목을 입력하세요.');
                 return;
             }
-            if (!contents) {
+            if (isQuillEmpty()) {
+                setSaveButtonEnabled(true);
                 alert('내용을 입력하세요.');
+                return;
+            }
+            if (quillEditor && quillEditor.getText().length > 5000) {
+                setSaveButtonEnabled(true);
+                alert('내용은 5000자 이내로 입력하세요.');
+                return;
+            }
+            var contentsBytes = getUtf8ByteLength(contents);
+            var contentsMaxBytes = 1000000;
+            if (contentsBytes > contentsMaxBytes) {
+                setSaveButtonEnabled(true);
+                alert('내용이 너무 깁니다. (약 ' + Math.round(contentsBytes / 1024) + 'KB / 최대 약 1MB)\n이미지를 줄이거나 텍스트를 줄여 주세요.');
                 return;
             }
             
@@ -873,6 +965,7 @@
                 if (isEditMode && editDocumentId) {
                     db.collection('bta_notifications').doc(editDocumentId).get().then(function(doc) {
                         if (!doc.exists) {
+                            setSaveButtonEnabled(true);
                             alert('전달사항을 찾을 수 없습니다.');
                             return;
                         }
@@ -907,16 +1000,19 @@
                             // 수정
                             db.collection('bta_notifications').doc(editDocumentId).update(announcementData)
                                 .then(function() {
+                                    setSaveButtonEnabled(true);
                                     alert('수정되었습니다.');
                                     closeModal();
                                     loadAnnouncementData('', '', '');
                                 })
                                 .catch(function(error) {
+                                    setSaveButtonEnabled(true);
                                     console.error('수정 오류:', error);
                                     alert('수정 중 오류가 발생했습니다: ' + error.message);
                                 });
                         });
                     }).catch(function(error) {
+                        setSaveButtonEnabled(true);
                         console.error('전달사항 조회 오류:', error);
                         alert('전달사항을 불러오는 중 오류가 발생했습니다.');
                     });
@@ -939,16 +1035,19 @@
                     
                     db.collection('bta_notifications').add(announcementData)
                         .then(function() {
+                            setSaveButtonEnabled(true);
                             alert('등록되었습니다.');
                             closeModal();
                             loadAnnouncementData('', '', '');
                         })
                         .catch(function(error) {
+                            setSaveButtonEnabled(true);
                             console.error('등록 오류:', error);
                             alert('등록 중 오류가 발생했습니다: ' + error.message);
                         });
                 }
             }).catch(function(error) {
+                setSaveButtonEnabled(true);
                 console.error('파일 업로드 오류:', error);
                 alert('파일 업로드 중 오류가 발생했습니다: ' + error.message);
             });
