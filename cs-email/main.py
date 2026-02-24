@@ -65,6 +65,37 @@ def get_user_name(uid):
     return ''
 
 
+# C/S 구분 lookup: type_cd 340 (프론트 getLookupValueName(db, '340', customerservice_cd, create_ymd) 와 동일)
+CUSTOMERSERVICE_LOOKUP_TYPE = '340'
+
+
+def get_lookup_value_name(db, type_cd, value_cd, ymd):
+    """
+    getLookupValueName(db, type_cd, value_cd, ymd) 와 동일 로직.
+    common_code_util.js getLookupValueName 참조: bta_lookup_value에서 type_cd, value_cd로 조회 후
+    ymd가 start_ymd ~ end_ymd 구간에 있는 문서의 value_nm 반환.
+    """
+    if not type_cd or not value_cd or not ymd or len(str(ymd).strip()) != 8:
+        return ''
+    ymd_str = str(ymd).strip()
+    try:
+        ymd_num = int(ymd_str, 10)
+    except (ValueError, TypeError):
+        return ''
+    ref = db.collection('bta_lookup_value').where('type_cd', '==', type_cd).where('value_cd', '==', value_cd)
+    for doc in ref.stream():
+        data = doc.to_dict()
+        start_ymd = (data.get('start_ymd') or '').strip()
+        end_ymd = (data.get('end_ymd') or '').strip()
+        if len(start_ymd) == 8 and len(end_ymd) == 8:
+            try:
+                if int(start_ymd, 10) <= ymd_num <= int(end_ymd, 10):
+                    return (data.get('value_nm') or '').strip()
+            except (ValueError, TypeError):
+                pass
+    return ''
+
+
 def build_table_rows(rows):
     """메일 본문용 HTML 테이블 행 생성 (순서, 구분, 제목, 제출일, 접수일, 완료일, 작성자)"""
     html = ''
@@ -119,8 +150,12 @@ def run_daily_email():
         if create_ymd == yesterday or update_ymd == yesterday:
             create_user = (d.get('create_user') or '').strip()
             author = get_user_name(create_user) if create_user else ''
+            cd = (d.get('customerservice_cd') or '').strip()
+            gubun_nm = get_lookup_value_name(db, CUSTOMERSERVICE_LOOKUP_TYPE, cd, create_ymd or yesterday) if cd else ''
+            if not gubun_nm:
+                gubun_nm = cd
             cond1_docs.append({
-                '구분': (d.get('customerservice_cd') or ''),
+                '구분': gubun_nm,
                 '제목': (d.get('title') or ''),
                 '제출일': format_ymd_display(create_ymd),
                 '접수일': format_ymd_display((d.get('start_ymd') or '').strip()),
@@ -146,8 +181,12 @@ def run_daily_email():
                 cond2_by_user[create_user] = []
             create_ymd = (d.get('create_ymd') or '').strip()
             author = get_user_name(create_user) if create_user else ''
+            cd = (d.get('customerservice_cd') or '').strip()
+            gubun_nm = get_lookup_value_name(db, CUSTOMERSERVICE_LOOKUP_TYPE, cd, create_ymd or yesterday) if cd else ''
+            if not gubun_nm:
+                gubun_nm = cd
             cond2_by_user[create_user].append({
-                '구분': (d.get('customerservice_cd') or ''),
+                '구분': gubun_nm,
                 '제목': (d.get('title') or ''),
                 '제출일': format_ymd_display(create_ymd),
                 '접수일': format_ymd_display(start_ymd),
