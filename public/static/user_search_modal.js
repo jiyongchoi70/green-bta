@@ -137,7 +137,7 @@
         // 선택된 ID 확인
         const selectedId = userSearchModalConfig.getSelectedId();
         if (!selectedId) {
-            alert(userSearchModalConfig.idFieldName === 'class_id' ? '반을 먼저 선택해주세요.' : '학부모를 먼저 선택해주세요.');
+            showMessageModal(userSearchModalConfig.idFieldName === 'class_id' ? '반을 먼저 선택해주세요.' : '학부모를 먼저 선택해주세요.');
             return;
         }
         
@@ -461,7 +461,7 @@
             })
             .catch(function(error) {
                 console.error('사용자 검색 오류:', error);
-                alert('사용자 검색 중 오류가 발생했습니다.');
+                showMessageModal('사용자 검색 중 오류가 발생했습니다.');
             });
     }
     
@@ -539,7 +539,7 @@
      */
     function saveUsersToDatabase(selectedRows, selectedId) {
         if (selectedRows.length === 0) {
-            alert('선택된 사용자가 없습니다.');
+            showMessageModal('선택된 사용자가 없습니다.');
             return;
         }
         
@@ -588,13 +588,13 @@
                     const duplicateMessages = duplicates.map(function(r) {
                         return r.name + '은(는) 이미 등록된 사람입니다.';
                     });
-                    alert(duplicateMessages.join('\n'));
+                    showMessageModal(duplicateMessages.join('\n'));
                     return Promise.reject(new Error('duplicate'));
                 }
                 
                 const validUsers = results.filter(function(r) { return r.userId; });
                 if (validUsers.length === 0) {
-                    alert('저장할 사용자 정보를 찾을 수 없습니다.');
+                    showMessageModal('저장할 사용자 정보를 찾을 수 없습니다.');
                     return Promise.resolve();
                 }
                 
@@ -631,7 +631,7 @@
             })
             .then(function() {
                 if (selectedRows.length > 0) {
-                    alert('등록되었습니다.');
+                    showMessageModal('등록되었습니다.');
                     closeUserSearchModal();
                     if (userSearchModalConfig.loadDataCallback) {
                         userSearchModalConfig.loadDataCallback(selectedId);
@@ -643,7 +643,7 @@
                     return;
                 }
                 console.error('등록 오류:', error);
-                alert('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
+                showMessageModal('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
             });
     }
     
@@ -657,14 +657,14 @@
         
         const selectedId = userSearchModalConfig.getSelectedId();
         if (!selectedId) {
-            alert(userSearchModalConfig.idFieldName === 'class_id' ? '반을 먼저 선택해주세요.' : '학부모를 먼저 선택해주세요.');
+            showMessageModal(userSearchModalConfig.idFieldName === 'class_id' ? '반을 먼저 선택해주세요.' : '학부모를 먼저 선택해주세요.');
             return;
         }
         
         // 그리드가 없으면 초기화 시도
         const gridElement = document.querySelector('#userSearchGrid');
         if (!gridElement) {
-            alert('그리드 요소를 찾을 수 없습니다.');
+            showMessageModal('그리드 요소를 찾을 수 없습니다.');
             return;
         }
         
@@ -687,7 +687,7 @@
         
         // 선택된 행이 없으면 경고
         if (selectedRows.length === 0) {
-            alert('선택된 사용자가 없습니다.');
+            showMessageModal('선택된 사용자가 없습니다.');
             return;
         }
         

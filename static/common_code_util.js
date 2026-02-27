@@ -1,3 +1,69 @@
+/**
+ * 메시지 모달 (alert 대체)
+ * @param {string} message - 표시할 메시지
+ */
+function showMessageModal(message) {
+    var id = 'btaMessageModal';
+    var overlay = document.getElementById(id);
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = id;
+        overlay.className = 'modal'; /* body.modal-open 시 pointer-events 유지 */
+        overlay.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = '<div id="btaMessageModalBox" style="position:relative;z-index:1;background:#fff;padding:24px 32px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:280px;max-width:90%;text-align:center;"><p id="btaMessageModalText" style="margin:0 0 20px 0;font-size:16px;color:#333;white-space:pre-wrap;"></p><button type="button" id="btaMessageModalOk" style="padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;">확인</button></div>';
+        document.body.appendChild(overlay);
+        document.getElementById('btaMessageModalOk').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.style.display = 'none';
+        });
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) overlay.style.display = 'none';
+        });
+    }
+    document.getElementById('btaMessageModalText').textContent = message || '';
+    overlay.style.display = 'flex';
+}
+
+/**
+ * 확인/취소 모달 (confirm 대체)
+ * @param {string} message - 표시할 메시지
+ * @param {function} onConfirm - 확인 클릭 시 콜백
+ * @param {function} [onCancel] - 취소 클릭 시 콜백
+ */
+function showConfirmModal(message, onConfirm, onCancel) {
+    var id = 'btaConfirmModal';
+    var overlay = document.getElementById(id);
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = id;
+        overlay.className = 'modal'; /* body.modal-open 시 pointer-events 유지 */
+        overlay.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = '<div style="position:relative;z-index:1;background:#fff;padding:24px 32px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:280px;max-width:90%;text-align:center;"><p id="btaConfirmModalText" style="margin:0 0 20px 0;font-size:16px;color:#333;white-space:pre-wrap;"></p><div style="display:flex;justify-content:center;gap:10px;"><button type="button" id="btaConfirmModalCancel" style="padding:10px 24px;background:#e5e7eb;color:#333;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;">취소</button><button type="button" id="btaConfirmModalOk" style="padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;">확인</button></div></div>';
+        document.body.appendChild(overlay);
+        document.getElementById('btaConfirmModalOk').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        });
+        document.getElementById('btaConfirmModalCancel').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            overlay.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        });
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
+                overlay.style.display = 'none';
+                if (typeof onCancel === 'function') onCancel();
+            }
+        });
+    }
+    document.getElementById('btaConfirmModalText').textContent = message || '';
+    overlay.style.display = 'flex';
+}
+
 function getLookupValueName(db, p_type_cd, p_value_cd, p_ymd) {
     return new Promise(function(resolve, reject) {
         if (!p_type_cd || !p_value_cd || !p_ymd) {

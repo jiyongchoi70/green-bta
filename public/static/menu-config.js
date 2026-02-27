@@ -95,7 +95,7 @@ const MENU_CONFIG = {
         
         // 네 번째 행
         {
-            label: '학부모등록',
+            label: '학부모 자녀매칭',
             column: '관리자',
             rowIndex: 3,
             link: './menu/system/parent-registration.html',

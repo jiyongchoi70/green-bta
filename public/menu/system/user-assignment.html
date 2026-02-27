@@ -356,7 +356,7 @@
                 })
                 .catch(function(error) {
                     console.error('발령 데이터 로드 오류:', error);
-                    alert('발령 데이터 로드 중 오류가 발생했습니다.');
+                    showMessageModal('발령 데이터 로드 중 오류가 발생했습니다.');
                 });
         }
         
@@ -402,22 +402,22 @@
             const endDate = document.getElementById('modalEndDate').value || null;
             
             if (!userId) {
-                alert('사용자를 선택하세요.');
+                showMessageModal('사용자를 선택하세요.');
                 return;
             }
             
             if (!orgId) {
-                alert('조직을 선택하세요.');
+                showMessageModal('조직을 선택하세요.');
                 return;
             }
             
             if (!position) {
-                alert('직책을 선택하세요.');
+                showMessageModal('직책을 선택하세요.');
                 return;
             }
             
             if (!startDate) {
-                alert('발령일을 입력하세요.');
+                showMessageModal('발령일을 입력하세요.');
                 return;
             }
             
@@ -446,13 +446,13 @@
                 db.collection('bta_user_assignment').doc(editingAssignmentId)
                     .update(assignmentData)
                     .then(function() {
-                        alert('발령이 수정되었습니다.');
+                        showMessageModal('발령이 수정되었습니다.');
                         document.getElementById('assignmentModal').style.display = 'none';
                         loadAssignments();
                     })
                     .catch(function(error) {
                         console.error('발령 수정 오류:', error);
-                        alert('발령 수정 중 오류가 발생했습니다.');
+                        showMessageModal('발령 수정 중 오류가 발생했습니다.');
                     });
             } else {
                 // 추가 - 기존 재직중인 발령 확인
@@ -461,58 +461,59 @@
                     .where('end_date', '==', null)
                     .get()
                     .then(function(querySnapshot) {
-                        if (!querySnapshot.empty && !confirm('재직중인 발령이 있습니다.\n기존 발령을 전출 처리하고 새로 발령하시겠습니까?')) {
-                            return Promise.reject('cancel');
+                        if (querySnapshot.empty) {
+                            return runAssignmentBatch(querySnapshot);
                         }
-                        
-                        // 배치 작업
-                        const batch = db.batch();
-                        
-                        // 기존 발령 전출 처리
-                        querySnapshot.forEach(function(doc) {
-                            batch.update(doc.ref, {
-                                end_date: startDate,
-                                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        return new Promise(function(resolve, reject) {
+                            showConfirmModal('재직중인 발령이 있습니다.\n기존 발령을 전출 처리하고 새로 발령하시겠습니까?', function() {
+                                runAssignmentBatch(querySnapshot).then(resolve).catch(reject);
+                            }, function() {
+                                reject('cancel');
                             });
                         });
-                        
-                        // 새 발령 추가
-                        assignmentData.created_at = firebase.firestore.FieldValue.serverTimestamp();
-                        const newAssignmentRef = db.collection('bta_user_assignment').doc();
-                        batch.set(newAssignmentRef, assignmentData);
-                        
-                        return batch.commit();
                     })
                     .then(function() {
-                        alert('발령이 완료되었습니다.');
+                        showMessageModal('발령이 완료되었습니다.');
                         document.getElementById('assignmentModal').style.display = 'none';
                         loadAssignments();
                     })
                     .catch(function(error) {
                         if (error !== 'cancel') {
                             console.error('발령 추가 오류:', error);
-                            alert('발령 추가 중 오류가 발생했습니다.');
+                            showMessageModal('발령 추가 중 오류가 발생했습니다.');
                         }
                     });
             }
         }
         
+        function runAssignmentBatch(querySnapshot) {
+            const batch = db.batch();
+            querySnapshot.forEach(function(doc) {
+                batch.update(doc.ref, {
+                    end_date: startDate,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            assignmentData.created_at = firebase.firestore.FieldValue.serverTimestamp();
+            const newAssignmentRef = db.collection('bta_user_assignment').doc();
+            batch.set(newAssignmentRef, assignmentData);
+            return batch.commit();
+        }
+        
         // 발령 삭제
         function deleteAssignment(assignmentData) {
-            if (!confirm(`${assignmentData.user_name}님의 발령 기록을 삭제하시겠습니까?`)) {
-                return;
-            }
-            
+            showConfirmModal(`${assignmentData.user_name}님의 발령 기록을 삭제하시겠습니까?`, function() {
             db.collection('bta_user_assignment').doc(assignmentData.id)
                 .delete()
                 .then(function() {
-                    alert('발령 기록이 삭제되었습니다.');
+                    showMessageModal('발령 기록이 삭제되었습니다.');
                     loadAssignments();
                 })
                 .catch(function(error) {
                     console.error('발령 삭제 오류:', error);
-                    alert('발령 삭제 중 오류가 발생했습니다.');
+                    showMessageModal('발령 삭제 중 오류가 발생했습니다.');
                 });
+            });
         }
     </script>
 </body>

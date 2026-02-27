@@ -413,7 +413,7 @@
             })
             .catch(function(error) {
                 console.error('사용자 검색 오류:', error);
-                alert('사용자 검색 중 오류가 발생했습니다.');
+                showMessageModal('사용자 검색 중 오류가 발생했습니다.');
             });
     }
     
@@ -425,14 +425,14 @@
         if (parentUserSearchGridApi) {
             const selectedRows = parentUserSearchGridApi.getSelectedRows();
             if (selectedRows.length === 0) {
-                alert('사용자를 선택해주세요.\n\n행을 클릭한 후 "선택" 버튼을 클릭하세요.');
+                showMessageModal('사용자를 선택해주세요.\n\n행을 클릭한 후 "선택" 버튼을 클릭하세요.');
                 return;
             }
             
             selectedParentUserData = selectedRows[0];
         } else {
             if (!selectedParentUserData) {
-                alert('사용자를 선택해주세요.\n\n행을 클릭한 후 "선택" 버튼을 클릭하세요.');
+                showMessageModal('사용자를 선택해주세요.\n\n행을 클릭한 후 "선택" 버튼을 클릭하세요.');
                 return;
             }
         }

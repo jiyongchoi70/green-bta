@@ -337,10 +337,10 @@
                 const fileName = `조직도조회_${new Date().toISOString().split('T')[0]}.pdf`;
                 pdf.save(fileName);
                 
-                alert('PDF 파일이 다운로드되었습니다.');
+                showMessageModal('PDF 파일이 다운로드되었습니다.');
             }).catch(function(error) {
                 console.error('PDF 생성 오류:', error);
-                alert('PDF 생성 중 오류가 발생했습니다.');
+                showMessageModal('PDF 생성 중 오류가 발생했습니다.');
             });
         }
         

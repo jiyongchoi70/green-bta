@@ -256,9 +256,9 @@
             var semester = document.getElementById('searchSemester').value;
             var cls = document.getElementById('searchClass').value;
             var student = document.getElementById('searchStudent').value;
-            if (!semester) { alert('학기를 선택해주세요.'); return false; }
-            if (!cls) { alert('반을 선택해주세요.'); return false; }
-            if (!student) { alert('학생 정보를 확인할 수 없습니다. 다시 로그인해주세요.'); return false; }
+            if (!semester) { showMessageModal('학기를 선택해주세요.'); return false; }
+            if (!cls) { showMessageModal('반을 선택해주세요.'); return false; }
+            if (!student) { showMessageModal('학생 정보를 확인할 수 없습니다. 다시 로그인해주세요.'); return false; }
             return true;
         }
 
@@ -356,7 +356,7 @@
                 })
                 .catch(function(err) {
                     console.error('과제제출확인 조회 오류:', err);
-                    alert('조회 중 오류가 발생했습니다.');
+                    showMessageModal('조회 중 오류가 발생했습니다.');
                 });
         }
 
@@ -397,7 +397,7 @@
                 var semester = document.getElementById('searchSemester').value;
                 var cls = document.getElementById('searchClass').value;
                 if (!semester || !cls) {
-                    alert('학기, 반을 선택한 후 조회해주세요.');
+                    showMessageModal('학기, 반을 선택한 후 조회해주세요.');
                     return;
                 }
                 var row = event.data;
@@ -503,7 +503,7 @@
                 })
                 .catch(function(err) {
                     console.error('과제수행도 로드 오류:', err);
-                    alert('과제수행도 데이터를 불러오는 중 오류가 발생했습니다.');
+                    showMessageModal('과제수행도 데이터를 불러오는 중 오류가 발생했습니다.');
                 });
         }
 
@@ -527,7 +527,7 @@
             var promises = rows.map(function(r) {
                 return db.collection('bta_student_task').doc(r.student_task_id).update({ value_cd: r.value_cd || null, score: r.score !== '' && r.score != null ? r.score : (r.score === 0 ? 0 : null) });
             });
-            Promise.all(promises).then(function() { alert('임시저장은 과제점수에 반영되지 않습니다.'); }).catch(function(err) { console.error(err); alert('저장 중 오류가 발생했습니다.'); });
+            Promise.all(promises).then(function() { showMessageModal('임시저장은 과제점수에 반영되지 않습니다.'); }).catch(function(err) { console.error(err); showMessageModal('저장 중 오류가 발생했습니다.'); });
         }
 
         function savePerformanceData() {
@@ -536,7 +536,7 @@
             performanceGridApi.forEachNode(function(node) { if (node.data && node.data.student_task_id) rows.push(node.data); });
             if (rows.length === 0) { closePerformanceModal(); return; }
             var missing = rows.filter(function(r) { var s = r.score; return (s !== 0 && s !== '0' && (s === '' || s === undefined || s === null)); });
-            if (missing.length > 0) { alert('모든 과제목록에 점수가 등록되어야 저장됩니다.'); return; }
+            if (missing.length > 0) { showMessageModal('모든 과제목록에 점수가 등록되어야 저장됩니다.'); return; }
             var ctx = performanceContext;
             var promises = rows.map(function(r) {
                 return db.collection('bta_student_task').doc(r.student_task_id).update({ value_cd: r.value_cd || null, score: r.score !== '' && r.score != null ? r.score : (r.score === 0 ? 0 : null) });
@@ -558,14 +558,14 @@
                     return snap.docs[0].ref.update({ task_score: sumScore });
                 })
                 .then(function() {
-                    alert('저장되었습니다.');
+                    showMessageModal('저장되었습니다.');
                     closePerformanceModal();
                     var semester = document.getElementById('searchSemester').value;
                     var cls = document.getElementById('searchClass').value;
                     var student = document.getElementById('searchStudent').value;
                     if (semester && cls && student) loadAssignmentSubmitDataStudent(semester, cls, student);
                 })
-                .catch(function(err) { console.error(err); alert('저장 중 오류가 발생했습니다.'); });
+                .catch(function(err) { console.error(err); showMessageModal('저장 중 오류가 발생했습니다.'); });
         }
 
         var recordTaskContext = { semesterCd: '', classCd: '', weekCd: '', userid: '', studentName: '' };
@@ -628,8 +628,8 @@
                     data.semester_cd = ctx.semesterCd; data.class_cd = ctx.classCd; data.week_cd = ctx.weekCd; data.user_id = ctx.userid;
                     return db.collection('bta_student_report').add(data);
                 })
-                .then(function() { alert('임시저장되었습니다.'); })
-                .catch(function(err) { console.error(err); alert('임시저장 중 오류가 발생했습니다.'); });
+                .then(function() { showMessageModal('임시저장되었습니다.'); })
+                .catch(function(err) { console.error(err); showMessageModal('임시저장 중 오류가 발생했습니다.'); });
         }
 
         function saveRecordTaskData() {
@@ -638,8 +638,8 @@
             var wordLearnInput = document.getElementById('wordLearnInput');
             var bibleDesc = bibleDescInput ? bibleDescInput.value.trim() : '';
             var wordLearn = wordLearnInput ? wordLearnInput.value.trim() : '';
-            if (!bibleDesc) { alert('성경질문을 입력해주세요.'); if (bibleDescInput) bibleDescInput.focus(); return; }
-            if (ctx.classCd === '110' && !wordLearn) { alert('말씀에 배운 점을 입력해주세요.'); if (wordLearnInput) wordLearnInput.focus(); return; }
+            if (!bibleDesc) { showMessageModal('성경질문을 입력해주세요.'); if (bibleDescInput) bibleDescInput.focus(); return; }
+            if (ctx.classCd === '110' && !wordLearn) { showMessageModal('말씀에 배운 점을 입력해주세요.'); if (wordLearnInput) wordLearnInput.focus(); return; }
             var data = { bible_desc: bibleDesc };
             if (ctx.classCd === '110') data.word_learn = wordLearn;
             db.collection('bta_student_report').where('semester_cd', '==', ctx.semesterCd).where('class_cd', '==', ctx.classCd).where('week_cd', '==', ctx.weekCd).where('user_id', '==', ctx.userid).limit(1).get()
@@ -651,14 +651,14 @@
                     return db.collection('bta_student_report').add(data).then(function() { return updateBibleMark(ctx); });
                 })
                 .then(function() {
-                    alert('제출되었습니다.');
+                    showMessageModal('제출되었습니다.');
                     closeRecordTaskModal();
                     var semester = document.getElementById('searchSemester').value;
                     var cls = document.getElementById('searchClass').value;
                     var student = document.getElementById('searchStudent').value;
                     if (semester && cls && student) loadAssignmentSubmitDataStudent(semester, cls, student);
                 })
-                .catch(function(err) { console.error(err); alert('제출 중 오류가 발생했습니다.'); });
+                .catch(function(err) { console.error(err); showMessageModal('제출 중 오류가 발생했습니다.'); });
         }
 
         function updateBibleMark(ctx) {

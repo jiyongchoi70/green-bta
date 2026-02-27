@@ -61,7 +61,6 @@
                     </div>
                     <div class="search-right">
                         <button id="exportExcelButton" class="export-excel-button">엑셀 다운로드</button>
-                        <button id="addButton" class="add-button">+</button>
                     </div>
                 </div>
             </div>
@@ -351,7 +350,7 @@
                         errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
                         errorMessage += '\n오류 메시지: ' + error.message;
                     }
-                    alert(errorMessage);
+                    showMessageModal(errorMessage);
                 });
         }
         
@@ -412,21 +411,21 @@
                 
                 db.collection('bta_users').doc(editDocumentId).update(data)
                     .then(function() {
-                        alert('수정되었습니다.');
+                        showMessageModal('수정되었습니다.');
                         closeModal();
                         loadUserData('', '', '', '');
                     })
                     .catch(function(error) {
                         console.error('수정 오류:', error);
-                        alert('수정 중 오류가 발생했습니다: ' + error.message);
+                        showMessageModal('수정 중 오류가 발생했습니다: ' + error.message);
                     });
             } else {
                 if (!name) {
-                    alert('성명을 입력해주세요.');
+                    showMessageModal('성명을 입력해주세요.');
                     return;
                 }
                 if (!email) {
-                    alert('이메일을 입력해주세요.');
+                    showMessageModal('이메일을 입력해주세요.');
                     return;
                 }
                 
@@ -435,7 +434,7 @@
                     .get()
                     .then(function(querySnapshot) {
                         if (!querySnapshot.empty) {
-                            alert('이미 등록된 이메일입니다.');
+                            showMessageModal('이미 등록된 이메일입니다.');
                             return Promise.reject(new Error('이미 등록된 이메일'));
                         }
                         
@@ -454,38 +453,36 @@
                         return db.collection('bta_users').add(data);
                     })
                     .then(function() {
-                        alert('등록되었습니다.');
+                        showMessageModal('등록되었습니다.');
                         closeModal();
                         loadUserData('', '', '', '');
                     })
                     .catch(function(error) {
                         if (error.message !== '이미 등록된 이메일') {
                             console.error('등록 오류:', error);
-                            alert('등록 중 오류가 발생했습니다: ' + error.message);
+                            showMessageModal('등록 중 오류가 발생했습니다: ' + error.message);
                         }
                     });
             }
         }
         
         function deleteUser(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) {
-                return;
-            }
-            
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             db.collection('bta_users').doc(data.id).delete()
                 .then(function() {
-                    alert('삭제되었습니다.');
+                    showMessageModal('삭제되었습니다.');
                     loadUserData('', '', '', '');
                 })
                 .catch(function(error) {
                     console.error('삭제 오류:', error);
-                    alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                    showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                 });
+            });
         }
         
         function exportToExcel() {
             if (allUserData.length === 0) {
-                alert('다운로드할 데이터가 없습니다.');
+                showMessageModal('다운로드할 데이터가 없습니다.');
                 return;
             }
             
@@ -519,7 +516,8 @@
         
         document.getElementById('exportExcelButton').addEventListener('click', exportToExcel);
         
-        document.getElementById('addButton').addEventListener('click', openAddModal);
+        const addButtonEl = document.getElementById('addButton');
+        if (addButtonEl) addButtonEl.addEventListener('click', openAddModal);
         
         document.getElementById('saveButton').addEventListener('click', saveUser);
         

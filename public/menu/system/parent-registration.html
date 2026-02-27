@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>학부모 등록 - BTA</title>
+    <title>학부모 자녀매칭 - BTA</title>
     <link rel="stylesheet" href="../../static/style.css">
     <link rel="stylesheet" href="../../static/parent-registration.css">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -30,7 +30,7 @@
     </script>
     <div class="container">
         <div class="announcements-header">
-            <h1 class="page-title">학부모 등록</h1>
+            <h1 class="page-title">학부모 자녀매칭</h1>
             <a href="../../" class="home-button">홈</a>
         </div>
 
@@ -38,7 +38,7 @@
             <div class="parent-section">
                 <div class="section-header">
                     <span class="section-icon">■</span>
-                    <h2>학부모등록</h2>
+                    <h2>학부모 자녀매칭</h2>
                     <button id="addParentButton" class="add-button">+</button>
                 </div>
                 <div class="filter-section" style="margin-bottom: 10px;">
@@ -65,11 +65,11 @@
         </div>
     </div>
 
-    <!-- 학부모등록 모달 (학기 + 학부모 선택) -->
+    <!-- 학부모 자녀매칭 모달 (학기 + 학부모 선택) -->
     <div id="parentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="parentModalTitle">학부모등록</h3>
+                <h3 id="parentModalTitle">학부모 자녀매칭</h3>
                 <span class="close-button">&times;</span>
             </div>
             <div class="modal-body">
@@ -280,7 +280,7 @@
                                     if (e) {
                                         e.value = name;
                                         e.setAttribute('data-userid', userId);
-                                        alert('학부모가 선택되었습니다: ' + name + '\n\n학기를 선택하고 저장 버튼을 클릭하세요.');
+                                        showMessageModal('학부모가 선택되었습니다: ' + name + '\n\n학기를 선택하고 저장 버튼을 클릭하세요.');
                                     }
                                 }, 200);
                             }
@@ -422,12 +422,12 @@
                     }
                 })
                 .catch(function(err) {
-                    console.error('학부모등록 데이터 로드 오류:', err);
-                    var msg = '학부모등록 데이터를 불러오는 중 오류가 발생했습니다.';
+                    console.error('학부모 자녀매칭 데이터 로드 오류:', err);
+                    var msg = '학부모 자녀매칭 데이터를 불러오는 중 오류가 발생했습니다.';
                     if (err && err.code === 'permission-denied') {
                         msg += '\n\nFirestore 보안 규칙을 확인해주세요.\nmatch /bta_parent/{document=**} { allow read, write: if request.auth != null; }\nmatch /bta_parent_students/{document=**} { allow read, write: if request.auth != null; }';
                     }
-                    alert(msg);
+                    showMessageModal(msg);
                 });
         }
 
@@ -483,12 +483,12 @@
                 })
                 .catch(function(err) {
                     console.error('학생등록 데이터 로드 오류:', err);
-                    alert('학생등록 데이터를 불러오는 중 오류가 발생했습니다.');
+                    showMessageModal('학생등록 데이터를 불러오는 중 오류가 발생했습니다.');
                 });
         }
 
         function openAddParentModal() {
-            document.getElementById('parentModalTitle').textContent = '학부모등록';
+            document.getElementById('parentModalTitle').textContent = '학부모 자녀매칭';
             document.getElementById('modalSemester').value = '';
             document.getElementById('modalParentName').value = '';
             document.getElementById('modalParentName').removeAttribute('data-userid');
@@ -514,62 +514,64 @@
         function saveParent() {
             var semesterCd = document.getElementById('modalSemester').value;
             var userid = document.getElementById('modalParentName').getAttribute('data-userid');
-            if (!semesterCd) { alert('학기를 선택해주세요.'); return; }
-            if (!userid) { alert('학부모를 선택해주세요.'); return; }
+            if (!semesterCd) { showMessageModal('학기를 선택해주세요.'); return; }
+            if (!userid) { showMessageModal('학부모를 선택해주세요.'); return; }
             db.collection('bta_parent').where('semester_cd', '==', semesterCd).where('userid', '==', userid).get()
                 .then(function(snap) {
                     if (!snap.empty) {
-                        alert('이미 등록된 학기와 학부모 조합입니다.');
+                        showMessageModal('이미 등록된 학기와 학부모 조합입니다.');
                         return Promise.reject(new Error('중복'));
                     }
                     return db.collection('bta_parent').add({ semester_cd: semesterCd, userid: userid });
                 })
                 .then(function() {
-                    alert('등록되었습니다.');
+                    showMessageModal('등록되었습니다.');
                     closeParentModal();
                     loadParentData();
                 })
                 .catch(function(e) {
                     if (e && e.message !== '중복') {
                         console.error('등록 오류:', e);
-                        alert('등록 중 오류가 발생했습니다.');
+                        showMessageModal('등록 중 오류가 발생했습니다.');
                     }
                 });
         }
 
         function deleteParent(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) return;
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             db.collection('bta_parent_students').where('parent_id', '==', data.parent_id).get()
                 .then(function(snap) {
                     if (!snap.empty) {
-                        alert('등록된 학생이 있어 삭제할 수 없습니다.');
+                        showMessageModal('등록된 학생이 있어 삭제할 수 없습니다.');
                         return Promise.reject(new Error('학생 존재'));
                     }
                     return db.collection('bta_parent').doc(data.parent_id).delete();
                 })
                 .then(function() {
-                    alert('삭제되었습니다.');
+                    showMessageModal('삭제되었습니다.');
                     loadParentData();
                 })
                 .catch(function(e) {
                     if (e && e.message !== '학생 존재') {
                         console.error('삭제 오류:', e);
-                        alert('삭제 중 오류가 발생했습니다.');
+                        showMessageModal('삭제 중 오류가 발생했습니다.');
                     }
                 });
+            });
         }
 
         function deleteStudent(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) return;
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             db.collection('bta_parent_students').doc(data.id).delete()
                 .then(function() {
-                    alert('삭제되었습니다.');
+                    showMessageModal('삭제되었습니다.');
                     loadStudentData(selectedParentId);
                 })
                 .catch(function(e) {
                     console.error('삭제 오류:', e);
-                    alert('삭제 중 오류가 발생했습니다.');
+                    showMessageModal('삭제 중 오류가 발생했습니다.');
                 });
+            });
         }
 
         function openParentSearchModal() {
@@ -579,7 +581,7 @@
 
         function exportToExcel() {
             if (allStudentData.length === 0) {
-                alert('다운로드할 데이터가 없습니다.');
+                showMessageModal('다운로드할 데이터가 없습니다.');
                 return;
             }
             var exportData = allStudentData.map(function(item) {

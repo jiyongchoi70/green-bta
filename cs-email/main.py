@@ -5,9 +5,13 @@ C/S 요청사항 일일 메일 발송 - Cloud Run 서비스
 - GET /run 또는 POST /run : 메일 발송 실행 (Cloud Scheduler에서 호출)
 """
 import os
-import json
+import sys
+import logging
 from datetime import datetime, timedelta
 from flask import Flask, request
+
+logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -19,6 +23,12 @@ RESEND_EMAIL_URL = 'https://api.resend.com/emails'
 
 # Firebase 초기화 (한 번만)
 _db = None
+
+try:
+    from google.cloud.firestore_v1.base_query import FieldFilter
+except ImportError:
+    FieldFilter = None  # 구버전 SDK 대응
+
 
 def get_firestore():
     global _db
@@ -49,18 +59,25 @@ def format_ymd_display(ymd):
     return f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}"
 
 
+def _user_query(db, uid):
+    col = db.collection('bta_users')
+    if FieldFilter is not None:
+        q = col.where(filter=FieldFilter('userId', '==', uid)).limit(1)
+    else:
+        q = col.where('userId', '==', uid).limit(1)
+    return q.stream()
+
+
 def get_user_email(uid):
     db = get_firestore()
-    users = db.collection('bta_users').where('userId', '==', uid).limit(1).stream()
-    for doc in users:
+    for doc in _user_query(db, uid):
         return (doc.to_dict().get('email') or '').strip()
     return ''
 
 
 def get_user_name(uid):
     db = get_firestore()
-    users = db.collection('bta_users').where('userId', '==', uid).limit(1).stream()
-    for doc in users:
+    for doc in _user_query(db, uid):
         return (doc.to_dict().get('name') or '').strip()
     return ''
 
@@ -82,8 +99,12 @@ def get_lookup_value_name(db, type_cd, value_cd, ymd):
         ymd_num = int(ymd_str, 10)
     except (ValueError, TypeError):
         return ''
-    ref = db.collection('bta_lookup_value').where('type_cd', '==', type_cd).where('value_cd', '==', value_cd)
-    for doc in ref.stream():
+    col = db.collection('bta_lookup_value')
+    if FieldFilter is not None:
+        q = col.where(filter=FieldFilter('type_cd', '==', type_cd)).where(filter=FieldFilter('value_cd', '==', value_cd))
+    else:
+        q = col.where('type_cd', '==', type_cd).where('value_cd', '==', value_cd)
+    for doc in q.stream():
         data = doc.to_dict()
         start_ymd = (data.get('start_ymd') or '').strip()
         end_ymd = (data.get('end_ymd') or '').strip()
@@ -213,10 +234,15 @@ def index():
 
 @app.route('/run', methods=['GET', 'POST'])
 def run():
-    ok, err = run_daily_email()
-    if ok:
-        return {'status': 'ok', 'message': 'Emails sent'}, 200
-    return {'status': 'error', 'message': err or 'Unknown error'}, 500
+    try:
+        ok, err = run_daily_email()
+        if ok:
+            return {'status': 'ok', 'message': 'Emails sent'}, 200
+        logger.error('run_daily_email failed: %s', err)
+        return {'status': 'error', 'message': err or 'Unknown error'}, 500
+    except Exception as e:
+        logger.exception('Exception in /run: %s', e)
+        return {'status': 'error', 'message': str(e)}, 500
 
 
 if __name__ == '__main__':

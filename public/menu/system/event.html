@@ -464,7 +464,7 @@
                         errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
                         errorMessage += '\n오류 메시지: ' + error.message;
                     }
-                    alert(errorMessage);
+                    showMessageModal(errorMessage);
                 });
         }
         
@@ -563,7 +563,7 @@
                         errorMessage += '\n\n오류 코드: ' + (error.code || '알 수 없음');
                         errorMessage += '\n오류 메시지: ' + error.message;
                     }
-                    alert(errorMessage);
+                    showMessageModal(errorMessage);
                 });
         }
         
@@ -603,12 +603,12 @@
             const classCd = document.getElementById('modalClassName').value;
             
             if (!semesterCd) {
-                alert('학기를 선택해주세요.');
+                showMessageModal('학기를 선택해주세요.');
                 return;
             }
             
             if (!classCd) {
-                alert('반명을 선택해주세요.');
+                showMessageModal('반명을 선택해주세요.');
                 return;
             }
             
@@ -618,7 +618,7 @@
                 .get()
                 .then(function(querySnapshot) {
                     if (!querySnapshot.empty) {
-                        alert('이미 등록된 학기와 반명 조합입니다.');
+                        showMessageModal('이미 등록된 학기와 반명 조합입니다.');
                         return Promise.reject(new Error('중복'));
                     }
                     
@@ -631,49 +631,47 @@
                     return db.collection('bta_class').add(data);
                 })
                 .then(function() {
-                    alert('등록되었습니다.');
+                    showMessageModal('등록되었습니다.');
                     closeClassModal();
                     loadClassData();
                 })
                 .catch(function(error) {
                     if (error.message !== '중복') {
                         console.error('등록 오류:', error);
-                        alert('등록 중 오류가 발생했습니다: ' + error.message);
+                        showMessageModal('등록 중 오류가 발생했습니다: ' + error.message);
                     }
                 });
         }
         
         function deleteClass(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) {
-                return;
-            }
-            
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             db.collection('bta_class_students')
                 .where('class_id', '==', data.class_id)
                 .get()
                 .then(function(querySnapshot) {
                     if (!querySnapshot.empty) {
-                        alert('등록된 학생이 있어 삭제할 수 없습니다.');
+                        showMessageModal('등록된 학생이 있어 삭제할 수 없습니다.');
                         return Promise.reject(new Error('학생 존재'));
                     }
                     
                     return db.collection('bta_class').doc(data.class_id).delete();
                 })
                 .then(function() {
-                    alert('삭제되었습니다.');
+                    showMessageModal('삭제되었습니다.');
                     loadClassData();
                 })
                 .catch(function(error) {
                     if (error.message !== '학생 존재') {
                         console.error('삭제 오류:', error);
-                        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                        showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                     }
                 });
+            });
         }
         
         function openAddStudentForm() {
             if (!selectedClassId) {
-                alert('반을 먼저 선택해주세요.');
+                showMessageModal('반을 먼저 선택해주세요.');
                 return;
             }
             
@@ -687,14 +685,14 @@
         
         function saveStudent() {
             if (!selectedClassId) {
-                alert('반을 먼저 선택해주세요.');
+                showMessageModal('반을 먼저 선택해주세요.');
                 return;
             }
             
             const userId = document.getElementById('studentName').getAttribute('data-userid');
             
             if (!userId) {
-                alert('사용자를 선택해주세요.');
+                showMessageModal('사용자를 선택해주세요.');
                 return;
             }
             
@@ -718,7 +716,7 @@
                         .get()
                         .then(function(querySnapshot) {
                             if (!querySnapshot.empty) {
-                                alert('이미 등록된 학생입니다.');
+                                showMessageModal('이미 등록된 학생입니다.');
                                 return Promise.reject(new Error('중복'));
                             }
                             var data = {
@@ -731,7 +729,7 @@
                         });
                 })
                 .then(function() {
-                    alert('등록되었습니다.');
+                    showMessageModal('등록되었습니다.');
                     document.getElementById('studentForm').style.display = 'none';
                     document.getElementById('studentName').value = '';
                     document.getElementById('studentName').removeAttribute('data-userid');
@@ -742,25 +740,23 @@
                 .catch(function(error) {
                     if (error.message !== '중복') {
                         console.error('등록 오류:', error);
-                        alert('등록 중 오류가 발생했습니다: ' + error.message);
+                        showMessageModal('등록 중 오류가 발생했습니다: ' + error.message);
                     }
                 });
         }
         
         function deleteStudent(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) {
-                return;
-            }
-            
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             db.collection('bta_class_students').doc(data.id).delete()
                 .then(function() {
-                    alert('삭제되었습니다.');
+                    showMessageModal('삭제되었습니다.');
                     loadStudentData(selectedClassId);
                 })
                 .catch(function(error) {
                     console.error('삭제 오류:', error);
-                    alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                    showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                 });
+            });
         }
         
         function openUserSearchModal() {
@@ -1061,25 +1057,25 @@
                 })
                 .catch(function(error) {
                     console.error('사용자 검색 오류:', error);
-                    alert('사용자 검색 중 오류가 발생했습니다.');
+                    showMessageModal('사용자 검색 중 오류가 발생했습니다.');
                 });
         }
         
         function saveSelectedUsers() {
             if (!selectedClassId) {
-                alert('반을 먼저 선택해주세요.');
+                showMessageModal('반을 먼저 선택해주세요.');
                 return;
             }
             
             if (!userSearchGridApi) {
-                alert('그리드가 초기화되지 않았습니다.');
+                showMessageModal('그리드가 초기화되지 않았습니다.');
                 return;
             }
             
             const selectedRows = userSearchGridApi.getSelectedRows();
             
             if (selectedRows.length === 0) {
-                alert('선택된 사용자가 없습니다.');
+                showMessageModal('선택된 사용자가 없습니다.');
                 return;
             }
             
@@ -1121,7 +1117,7 @@
                     
                     if (duplicates.length > 0) {
                         var duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
-                        alert(duplicateNames + '이 등록되어 있습니다.');
+                        showMessageModal(duplicateNames + '이 등록되어 있습니다.');
                         return Promise.reject(new Error('duplicate'));
                     }
                     
@@ -1145,7 +1141,7 @@
                 })
                 .then(function() {
                     if (selectedRows.length > 0) {
-                        alert('등록되었습니다.');
+                        showMessageModal('등록되었습니다.');
                         closeUserSearchModal();
                         loadStudentData(selectedClassId);
                     }
@@ -1155,7 +1151,7 @@
                         return;
                     }
                     console.error('등록 오류:', error);
-                    alert('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
+                    showMessageModal('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
                 });
         }
         
@@ -1252,7 +1248,7 @@
                     suppressRowClickSelection: false,
                     onRowClicked: function(event) {
                         if (event.data) {
-                            alert('선택된 행은 ' + event.data.name + '입니다.');
+                            showMessageModal('선택된 행은 ' + event.data.name + '입니다.');
                         }
                     }
                 };
@@ -1370,18 +1366,18 @@
                 })
                 .catch(function(error) {
                     console.error('사용자 검색 오류:', error);
-                    alert('사용자 검색 중 오류가 발생했습니다.');
+                    showMessageModal('사용자 검색 중 오류가 발생했습니다.');
                 });
         }
         
         function saveSelectedUsers2() {
             if (!selectedClassId) {
-                alert('반을 먼저 선택해주세요.');
+                showMessageModal('반을 먼저 선택해주세요.');
                 return;
             }
             
             if (!userSearchGridApi2) {
-                alert('그리드가 초기화되지 않았습니다.');
+                showMessageModal('그리드가 초기화되지 않았습니다.');
                 return;
             }
             
@@ -1393,7 +1389,7 @@
             });
             
             if (selectedRows.length === 0) {
-                alert('선택된 사용자가 없습니다.');
+                showMessageModal('선택된 사용자가 없습니다.');
                 return;
             }
             
@@ -1435,7 +1431,7 @@
                     
                     if (duplicates.length > 0) {
                         var duplicateNames = duplicates.map(function(r) { return r.name; }).join(', ');
-                        alert(duplicateNames + '이 등록되어 있습니다.');
+                        showMessageModal(duplicateNames + '이 등록되어 있습니다.');
                         return Promise.reject(new Error('duplicate'));
                     }
                     
@@ -1458,7 +1454,7 @@
                 })
                 .then(function() {
                     if (selectedRows.length > 0) {
-                        alert('등록되었습니다.');
+                        showMessageModal('등록되었습니다.');
                         closeUserSearchModal2();
                         loadStudentData(selectedClassId);
                     }
@@ -1468,13 +1464,13 @@
                         return;
                     }
                     console.error('등록 오류:', error);
-                    alert('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
+                    showMessageModal('등록 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
                 });
         }
         
         function exportToExcel() {
             if (allStudentData.length === 0) {
-                alert('다운로드할 데이터가 없습니다.');
+                showMessageModal('다운로드할 데이터가 없습니다.');
                 return;
             }
             

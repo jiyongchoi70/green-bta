@@ -224,7 +224,7 @@
                 })
                 .catch(function(error) {
                     console.error('조직 데이터 로드 오류:', error);
-                    alert('조직 데이터 로드 중 오류가 발생했습니다.');
+                    showMessageModal('조직 데이터 로드 중 오류가 발생했습니다.');
                 });
         }
         
@@ -369,28 +369,25 @@
             const targetOrg = allOrganizations.find(org => org.id === targetId);
             
             if (!draggedOrg || !targetOrg) {
-                alert('조직을 찾을 수 없습니다.');
+                showMessageModal('조직을 찾을 수 없습니다.');
                 return;
             }
             
             // 자기 자신에게 이동 불가
             if (draggedId === targetId) {
-                alert('자기 자신에게는 이동할 수 없습니다.');
+                showMessageModal('자기 자신에게는 이동할 수 없습니다.');
                 return;
             }
             
             // 하위 조직으로 이동 불가 (순환 참조 방지)
             const childIds = getAllChildOrgIds(draggedId, allOrganizations);
             if (childIds.includes(targetId)) {
-                alert('하위 조직으로는 이동할 수 없습니다.');
+                showMessageModal('하위 조직으로는 이동할 수 없습니다.');
                 return;
             }
             
             // 확인 메시지
-            if (!confirm(`"${draggedOrg.name}"을(를) "${targetOrg.name}"의 하위 조직으로 이동하시겠습니까?`)) {
-                return;
-            }
-            
+            showConfirmModal(`"${draggedOrg.name}"을(를) "${targetOrg.name}"의 하위 조직으로 이동하시겠습니까?`, function() {
             // 새로운 레벨 계산
             const newLevel = (targetOrg.level || 0) + 1;
             const levelDiff = newLevel - (draggedOrg.level || 0);
@@ -420,13 +417,14 @@
             
             batch.commit()
                 .then(function() {
-                    alert('조직이 이동되었습니다.');
+                    showMessageModal('조직이 이동되었습니다.');
                     loadOrganizations();
                 })
                 .catch(function(error) {
                     console.error('조직 이동 오류:', error);
-                    alert('조직 이동 중 오류가 발생했습니다.');
+                    showMessageModal('조직 이동 중 오류가 발생했습니다.');
                 });
+            });
         }
         
         // 상위 조직 선택 박스 업데이트
@@ -683,12 +681,12 @@
             const order = parseInt(document.getElementById('modalOrgOrder').value);
             
             if (!name) {
-                alert('조직명을 입력하세요.');
+                showMessageModal('조직명을 입력하세요.');
                 return;
             }
             
             if (!type) {
-                alert('조직유형을 선택하세요.');
+                showMessageModal('조직유형을 선택하세요.');
                 return;
             }
             
@@ -720,13 +718,13 @@
                 db.collection('bta_organization').doc(editingOrgId)
                     .update(orgData)
                     .then(function() {
-                        alert('조직이 수정되었습니다.');
+                        showMessageModal('조직이 수정되었습니다.');
                         document.getElementById('orgModal').style.display = 'none';
                         loadOrganizations();
                     })
                     .catch(function(error) {
                         console.error('조직 수정 오류:', error);
-                        alert('조직 수정 중 오류가 발생했습니다.');
+                        showMessageModal('조직 수정 중 오류가 발생했습니다.');
                     });
             } else {
                 // 추가
@@ -735,13 +733,13 @@
                 db.collection('bta_organization')
                     .add(orgData)
                     .then(function() {
-                        alert('조직이 추가되었습니다.');
+                        showMessageModal('조직이 추가되었습니다.');
                         document.getElementById('orgModal').style.display = 'none';
                         loadOrganizations();
                     })
                     .catch(function(error) {
                         console.error('조직 추가 오류:', error);
-                        alert('조직 추가 중 오류가 발생했습니다.');
+                        showMessageModal('조직 추가 중 오류가 발생했습니다.');
                     });
             }
         }
@@ -751,14 +749,11 @@
             // 하위 조직 확인
             const hasChildren = allOrganizations.some(org => org.parent_id === orgData.id);
             if (hasChildren) {
-                alert('하위 조직이 있어 삭제할 수 없습니다.\n먼저 하위 조직을 삭제하세요.');
+                showMessageModal('하위 조직이 있어 삭제할 수 없습니다.\n먼저 하위 조직을 삭제하세요.');
                 return;
             }
             
-            if (!confirm(`"${orgData.name}" 조직을 삭제하시겠습니까?`)) {
-                return;
-            }
-            
+            showConfirmModal(`"${orgData.name}" 조직을 삭제하시겠습니까?`, function() {
             // 소속 인원 확인
             db.collection('bta_user_assignment')
                 .where('org_id', '==', orgData.id)
@@ -766,7 +761,7 @@
                 .get()
                 .then(function(querySnapshot) {
                     if (!querySnapshot.empty) {
-                        alert('소속된 인원이 있어 삭제할 수 없습니다.\n먼저 소속 인원을 전출하세요.');
+                        showMessageModal('소속된 인원이 있어 삭제할 수 없습니다.\n먼저 소속 인원을 전출하세요.');
                         return;
                     }
                     
@@ -775,7 +770,7 @@
                 })
                 .then(function() {
                     if (arguments.length > 0) {
-                        alert('조직이 삭제되었습니다.');
+                        showMessageModal('조직이 삭제되었습니다.');
                         loadOrganizations();
                         
                         if (selectedOrgId === orgData.id) {
@@ -786,8 +781,9 @@
                 })
                 .catch(function(error) {
                     console.error('조직 삭제 오류:', error);
-                    alert('조직 삭제 중 오류가 발생했습니다.');
+                    showMessageModal('조직 삭제 중 오류가 발생했습니다.');
                 });
+            });
         }
         
         // 소속 인원 로드
@@ -1071,10 +1067,10 @@
                 // 임시 div 제거
                 document.body.removeChild(tempDiv);
                 
-                alert('PDF 파일이 다운로드되었습니다.');
+                showMessageModal('PDF 파일이 다운로드되었습니다.');
             }).catch(function(error) {
                 console.error('PDF 생성 오류:', error);
-                alert('PDF 생성 중 오류가 발생했습니다.');
+                showMessageModal('PDF 생성 중 오류가 발생했습니다.');
                 document.body.removeChild(tempDiv);
             });
         }

@@ -546,7 +546,7 @@
                 })
                 .catch(function(error) {
                     console.error('전달사항 데이터 로드 오류:', error);
-                    alert('전달사항을 불러오는 중 오류가 발생했습니다: ' + error.message);
+                    showMessageModal('전달사항을 불러오는 중 오류가 발생했습니다: ' + error.message);
                 });
         }
         
@@ -615,7 +615,7 @@
             // Firestore에서 최신 데이터 가져오기
             db.collection('bta_notifications').doc(data.id).get().then(function(doc) {
                 if (!doc.exists) {
-                    alert('전달사항을 찾을 수 없습니다.');
+                    showMessageModal('전달사항을 찾을 수 없습니다.');
                     isModalOpening = false;
                     return;
                 }
@@ -699,7 +699,7 @@
                 }, 500);
             }).catch(function(error) {
                 console.error('전달사항 조회 오류:', error);
-                alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                showMessageModal('전달사항을 불러오는 중 오류가 발생했습니다.');
                 isModalOpening = false;
             });
         }
@@ -715,7 +715,7 @@
             // Firestore에서 최신 데이터 가져오기
             db.collection('bta_notifications').doc(data.id).get().then(function(doc) {
                 if (!doc.exists) {
-                    alert('전달사항을 찾을 수 없습니다.');
+                    showMessageModal('전달사항을 찾을 수 없습니다.');
                     isModalOpening = false;
                     return;
                 }
@@ -778,10 +778,10 @@
                         deleteBtn.className = 'delete-btn';
                         deleteBtn.style.fontSize = '12px';
                         deleteBtn.onclick = function() {
-                            if (confirm('첨부파일을 삭제하시겠습니까?')) {
+                            showConfirmModal('첨부파일을 삭제하시겠습니까?', function() {
                                 attachmentsToDelete.push(file.path);
                                 fileItem.remove();
-                            }
+                            });
                         };
                         
                         fileItem.appendChild(fileName);
@@ -806,7 +806,7 @@
                 }, 500);
             }).catch(function(error) {
                 console.error('전달사항 조회 오류:', error);
-                alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                showMessageModal('전달사항을 불러오는 중 오류가 발생했습니다.');
                 isModalOpening = false;
             });
         }
@@ -846,7 +846,7 @@
                 link.click();
             }).catch(function(error) {
                 console.error('파일 다운로드 오류:', error);
-                alert('파일 다운로드 중 오류가 발생했습니다.');
+                showMessageModal('파일 다운로드 중 오류가 발생했습니다.');
             });
         }
         
@@ -884,22 +884,22 @@
             // 필수 필드 검증
             if (!notificationCd) {
                 setSaveButtonEnabled(true);
-                alert('구분을 선택하세요.');
+                showMessageModal('구분을 선택하세요.');
                 return;
             }
             if (!userType) {
                 setSaveButtonEnabled(true);
-                alert('대상을 선택하세요.');
+                showMessageModal('대상을 선택하세요.');
                 return;
             }
             if (!startYmdInput) {
                 setSaveButtonEnabled(true);
-                alert('개시일을 입력하세요.');
+                showMessageModal('개시일을 입력하세요.');
                 return;
             }
             if (!endYmdInput) {
                 setSaveButtonEnabled(true);
-                alert('종료일을 입력하세요.');
+                showMessageModal('종료일을 입력하세요.');
                 return;
             }
             
@@ -914,24 +914,24 @@
             
             if (!title) {
                 setSaveButtonEnabled(true);
-                alert('제목을 입력하세요.');
+                showMessageModal('제목을 입력하세요.');
                 return;
             }
             if (isQuillEmpty()) {
                 setSaveButtonEnabled(true);
-                alert('내용을 입력하세요.');
+                showMessageModal('내용을 입력하세요.');
                 return;
             }
             if (quillEditor && quillEditor.getText().length > 5000) {
                 setSaveButtonEnabled(true);
-                alert('내용은 5000자 이내로 입력하세요.');
+                showMessageModal('내용은 5000자 이내로 입력하세요.');
                 return;
             }
             var contentsBytes = getUtf8ByteLength(contents);
             var contentsMaxBytes = 1000000;
             if (contentsBytes > contentsMaxBytes) {
                 setSaveButtonEnabled(true);
-                alert('내용이 너무 깁니다. (약 ' + Math.round(contentsBytes / 1024) + 'KB / 최대 약 1MB)\n이미지를 줄이거나 텍스트를 줄여 주세요.');
+                showMessageModal('내용이 너무 깁니다. (약 ' + Math.round(contentsBytes / 1024) + 'KB / 최대 약 1MB)\n이미지를 줄이거나 텍스트를 줄여 주세요.');
                 return;
             }
             
@@ -966,7 +966,7 @@
                     db.collection('bta_notifications').doc(editDocumentId).get().then(function(doc) {
                         if (!doc.exists) {
                             setSaveButtonEnabled(true);
-                            alert('전달사항을 찾을 수 없습니다.');
+                            showMessageModal('전달사항을 찾을 수 없습니다.');
                             return;
                         }
                         
@@ -1001,20 +1001,20 @@
                             db.collection('bta_notifications').doc(editDocumentId).update(announcementData)
                                 .then(function() {
                                     setSaveButtonEnabled(true);
-                                    alert('수정되었습니다.');
+                                    showMessageModal('수정되었습니다.');
                                     closeModal();
                                     loadAnnouncementData('', '', '');
                                 })
                                 .catch(function(error) {
                                     setSaveButtonEnabled(true);
                                     console.error('수정 오류:', error);
-                                    alert('수정 중 오류가 발생했습니다: ' + error.message);
+                                    showMessageModal('수정 중 오류가 발생했습니다: ' + error.message);
                                 });
                         });
                     }).catch(function(error) {
                         setSaveButtonEnabled(true);
                         console.error('전달사항 조회 오류:', error);
-                        alert('전달사항을 불러오는 중 오류가 발생했습니다.');
+                        showMessageModal('전달사항을 불러오는 중 오류가 발생했습니다.');
                     });
                 } else {
                     // 등록
@@ -1036,28 +1036,25 @@
                     db.collection('bta_notifications').add(announcementData)
                         .then(function() {
                             setSaveButtonEnabled(true);
-                            alert('등록되었습니다.');
+                            showMessageModal('등록되었습니다.');
                             closeModal();
                             loadAnnouncementData('', '', '');
                         })
                         .catch(function(error) {
                             setSaveButtonEnabled(true);
                             console.error('등록 오류:', error);
-                            alert('등록 중 오류가 발생했습니다: ' + error.message);
+                            showMessageModal('등록 중 오류가 발생했습니다: ' + error.message);
                         });
                 }
             }).catch(function(error) {
                 setSaveButtonEnabled(true);
                 console.error('파일 업로드 오류:', error);
-                alert('파일 업로드 중 오류가 발생했습니다: ' + error.message);
+                showMessageModal('파일 업로드 중 오류가 발생했습니다: ' + error.message);
             });
         }
         
         function deleteAnnouncement(data) {
-            if (!confirm('정말 삭제하시겠습니까?')) {
-                return;
-            }
-            
+            showConfirmModal('정말 삭제하시겠습니까?', function() {
             // 첨부파일 삭제
             if (data.attachments && data.attachments.length > 0) {
                 const deletePromises = data.attachments.map(function(file) {
@@ -1069,30 +1066,31 @@
                 Promise.all(deletePromises).then(function() {
                     db.collection('bta_notifications').doc(data.id).delete()
                         .then(function() {
-                            alert('삭제되었습니다.');
+                            showMessageModal('삭제되었습니다.');
                             loadAnnouncementData('', '', '');
                         })
                         .catch(function(error) {
                             console.error('삭제 오류:', error);
-                            alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                            showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                         });
                 });
             } else {
                 db.collection('bta_notifications').doc(data.id).delete()
                     .then(function() {
-                        alert('삭제되었습니다.');
+                        showMessageModal('삭제되었습니다.');
                         loadAnnouncementData('', '', '');
                     })
                     .catch(function(error) {
                         console.error('삭제 오류:', error);
-                        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+                        showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                     });
             }
+            });
         }
         
         function exportToExcel() {
             if (allAnnouncementData.length === 0) {
-                alert('다운로드할 데이터가 없습니다.');
+                showMessageModal('다운로드할 데이터가 없습니다.');
                 return;
             }
             
@@ -1203,12 +1201,12 @@
             const startYear = startYmdInput.value.substring(0, 4);
             const endYear = endYmdInput.value.substring(0, 4);
             if (startYear.length !== 4 || isNaN(startYear) || parseInt(startYear) < 1000 || parseInt(startYear) > 9999) {
-                alert('개시일의 년도는 4자리 숫자여야 합니다.');
+                showMessageModal('개시일의 년도는 4자리 숫자여야 합니다.');
                 startYmdInput.focus();
                 return false;
             }
             if (endYear.length !== 4 || isNaN(endYear) || parseInt(endYear) < 1000 || parseInt(endYear) > 9999) {
-                alert('종료일의 년도는 4자리 숫자여야 합니다.');
+                showMessageModal('종료일의 년도는 4자리 숫자여야 합니다.');
                 endYmdInput.focus();
                 return false;
             }
@@ -1218,7 +1216,7 @@
             const endDate = new Date(endYmdInput.value);
             
             if (startDate > endDate) {
-                alert('개시일은 종료일보다 작거나 같아야 합니다.');
+                showMessageModal('개시일은 종료일보다 작거나 같아야 합니다.');
                 startYmdInput.focus();
                 return false;
             }
@@ -1250,7 +1248,7 @@
                     });
                     
                     if (isDuplicate) {
-                        alert('이미 추가된 파일입니다: ' + file.name);
+                        showMessageModal('이미 추가된 파일입니다: ' + file.name);
                         return;
                     }
                     
@@ -1275,7 +1273,7 @@
                     deleteBtn.className = 'delete-btn';
                     deleteBtn.style.fontSize = '12px';
                     deleteBtn.onclick = function() {
-                        if (confirm('첨부파일을 삭제하시겠습니까?')) {
+                        showConfirmModal('첨부파일을 삭제하시겠습니까?', function() {
                             const fileIndex = parseInt(fileItem.getAttribute('data-file-index'));
                             selectedFiles.splice(fileIndex, 1);
                             fileItem.remove();
@@ -1292,7 +1290,7 @@
                             remainingItems.forEach(function(item, idx) {
                                 item.setAttribute('data-file-index', idx);
                             });
-                        }
+                        });
                     };
                     
                     fileItem.appendChild(fileName);

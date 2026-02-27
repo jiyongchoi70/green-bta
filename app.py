@@ -60,7 +60,7 @@ def menu_page(room_type, menu_item):
         'permission': '권한관리',
         'assignment-list': '과제목록',
         'common-code': '공통코드',
-        'parent-registration': '학부모 등록',
+        'parent-registration': '학부모 자녀매칭',
         'organization': '조직도',
         'user-assignment': '발령',
         'organization-chart': '조직도조회'

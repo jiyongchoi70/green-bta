@@ -470,7 +470,7 @@
             const weekCd = document.getElementById('searchWeek').value;
             
             if (!semesterCd || !classCd) {
-                alert('학기와 반은 필수 조회 조건입니다.');
+                showMessageModal('학기와 반은 필수 조회 조건입니다.');
                 return;
             }
             
@@ -546,7 +546,7 @@
                 }
             }).catch(function(error) {
                 console.error('학기별 반별 주차등록 데이터 로드 오류:', error);
-                alert('데이터를 불러오는 중 오류가 발생했습니다.');
+                showMessageModal('데이터를 불러오는 중 오류가 발생했습니다.');
             });
         }
             
@@ -601,7 +601,7 @@
                         taskDetailGridApi.setGridOption('rowData', data);
                     }).catch(function(error) {
                         console.error('과제목록 데이터 로드 오류:', error);
-                        alert('과제목록 데이터를 불러오는 중 오류가 발생했습니다.');
+                        showMessageModal('과제목록 데이터를 불러오는 중 오류가 발생했습니다.');
                     });
             }
             
@@ -687,17 +687,17 @@
                 const endDate = document.getElementById('modalTaskGroupEndDate').value;
                 
                 if (!semesterCd || !classCd) {
-                    alert('학기와 반은 필수 항목입니다.');
+                    showMessageModal('학기와 반은 필수 항목입니다.');
                     return;
                 }
                 
                 if (!weekCd) {
-                    alert('주차는 필수 항목입니다.');
+                    showMessageModal('주차는 필수 항목입니다.');
                     return;
                 }
                 
                 if (!startDate || !endDate) {
-                    alert('시작일과 종료일은 필수 항목입니다.');
+                    showMessageModal('시작일과 종료일은 필수 항목입니다.');
                     return;
                 }
                 
@@ -705,7 +705,7 @@
                 const endYmd = dateToYmd(endDate);
                 
                 if (endYmd < startYmd) {
-                    alert('종료일은 시작일보다 크거나 같아야 합니다.');
+                    showMessageModal('종료일은 시작일보다 크거나 같아야 합니다.');
                     return;
                 }
                 
@@ -741,20 +741,20 @@
                             }
                         }
                         if (duplicate) {
-                            alert('동일한 학기·반·주차가 이미 등록되어 있습니다.');
+                            showMessageModal('동일한 학기·반·주차가 이미 등록되어 있습니다.');
                             return;
                         }
                         if (isEditModeTaskGroup && editTaskGroupDocumentId) {
                             return db.collection('bta_task_group').doc(editTaskGroupDocumentId).update(data)
                                 .then(function() {
-                                    alert('수정되었습니다.');
+                                    showMessageModal('수정되었습니다.');
                                     closeTaskGroupModal();
                                     loadTaskGroupList();
                                 });
                         } else {
                             return db.collection('bta_task_group').add(data)
                                 .then(function(docRef) {
-                                    alert('등록되었습니다.');
+                                    showMessageModal('등록되었습니다.');
                                     closeTaskGroupModal();
                                     loadTaskGroupList();
                                 });
@@ -762,24 +762,21 @@
                     })
                     .catch(function(error) {
                         console.error('저장 오류:', error);
-                        alert('저장 중 오류가 발생했습니다.');
+                        showMessageModal('저장 중 오류가 발생했습니다.');
                     });
             }
             
             function deleteTaskGroup(data) {
-                if (!confirm('정말 삭제하시겠습니까?')) {
-                    return;
-                }
-                
+                showConfirmModal('정말 삭제하시겠습니까?', function() {
                 db.collection('bta_task_group').doc(data.id).get()
                     .then(function(docSnap) {
                         if (!docSnap.exists) {
-                            alert('해당 항목을 찾을 수 없습니다.');
+                            showMessageModal('해당 항목을 찾을 수 없습니다.');
                             return Promise.reject(new Error('not found'));
                         }
                         const viewYmd = (docSnap.data().view_ymd || '').toString().trim();
                         if (viewYmd !== '') {
-                            alert('개시일이 있으면 삭제가 안됩니다.');
+                            showMessageModal('개시일이 있으면 삭제가 안됩니다.');
                             return Promise.reject(new Error('view_ymd exists'));
                         }
                         return db.collection('bta_task_detail')
@@ -788,13 +785,13 @@
                     })
                     .then(function(querySnapshot) {
                         if (querySnapshot && !querySnapshot.empty) {
-                            alert('과제목록이 등록된 항목은 삭제할 수 없습니다.');
+                            showMessageModal('과제목록이 등록된 항목은 삭제할 수 없습니다.');
                             return Promise.reject(new Error('has detail'));
                         }
                         return db.collection('bta_task_group').doc(data.id).delete();
                     })
                     .then(function() {
-                        alert('삭제되었습니다.');
+                        showMessageModal('삭제되었습니다.');
                         loadTaskGroupList();
                     })
                     .catch(function(error) {
@@ -802,8 +799,9 @@
                             return;
                         }
                         console.error('삭제 오류:', error);
-                        alert('삭제 중 오류가 발생했습니다.');
+                        showMessageModal('삭제 중 오류가 발생했습니다.');
                     });
+            });
             }
             
             function copyTaskToGroup(data) {
@@ -811,7 +809,7 @@
                 var semesterCd = document.getElementById('searchSemester').value;
                 var classCd = document.getElementById('searchClass').value;
                 if (!semesterCd || !classCd) {
-                    alert('학기와 반을 선택한 후 조회해주세요.');
+                    showMessageModal('학기와 반을 선택한 후 조회해주세요.');
                     return;
                 }
                 db.collection('bta_task_detail')
@@ -820,7 +818,7 @@
                     .get()
                     .then(function(snap) {
                         if (snap && !snap.empty) {
-                            alert('과제목록이 있으면 복사가 안됩니다.');
+                            showMessageModal('과제목록이 있으면 복사가 안됩니다.');
                             return Promise.reject(new Error('has_task_detail'));
                         }
                         return db.collection('bta_task_group')
@@ -866,7 +864,7 @@
                                 select.appendChild(opt);
                             });
                             if (select.options.length <= 1) {
-                                alert('복사할 주차가 없습니다.');
+                                showMessageModal('복사할 주차가 없습니다.');
                                 return;
                             }
                             document.getElementById('taskGroupCopyModal').style.display = 'block';
@@ -875,7 +873,7 @@
                     .catch(function(err) {
                         if (err && err.message === 'has_task_detail') return;
                         console.error('과제복사 목록 로드 오류:', err);
-                        alert('복사할 주차 목록을 불러오는 중 오류가 발생했습니다.');
+                        showMessageModal('복사할 주차 목록을 불러오는 중 오류가 발생했습니다.');
                     });
             }
             
@@ -893,7 +891,7 @@
                 db.collection('bta_task_group').doc(data.id).get()
                     .then(function(docSnap) {
                         if (!docSnap.exists) {
-                            alert('선택한 주차 정보를 찾을 수 없습니다.');
+                            showMessageModal('선택한 주차 정보를 찾을 수 없습니다.');
                             return;
                         }
                         const d = docSnap.data();
@@ -908,7 +906,7 @@
                     })
                     .catch(function(err) {
                         console.error('과제목록 생성 모달 로드 오류:', err);
-                        alert('주차 정보를 불러오는 중 오류가 발생했습니다.');
+                        showMessageModal('주차 정보를 불러오는 중 오류가 발생했습니다.');
                     });
             }
             
@@ -938,19 +936,19 @@
                 if (!selectedTaskGroupId) return;
                 const dateVal = document.getElementById('taskCreateViewYmd').value.trim();
                 if (!dateVal) {
-                    alert('개시일을 입력해주세요.');
+                    showMessageModal('개시일을 입력해주세요.');
                     return;
                 }
                 const viewYmd = dateVal.replace(/-/g, '');
                 db.collection('bta_task_group').doc(selectedTaskGroupId).update({ view_ymd: viewYmd })
                     .then(function() {
-                        alert('저장되었습니다.');
+                        showMessageModal('저장되었습니다.');
                         refreshTaskCreateModalButtons();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
                         console.error('개시일 저장 오류:', err);
-                        alert('저장 중 오류가 발생했습니다.');
+                        showMessageModal('저장 중 오류가 발생했습니다.');
                     });
             }
             
@@ -958,7 +956,7 @@
                 if (!selectedTaskGroupId) return;
                 const dateVal = document.getElementById('taskCreateViewYmd').value.trim();
                 if (!dateVal) {
-                    alert('개시일 등록 후 생성을 진행해 주세요.');
+                    showMessageModal('개시일 등록 후 생성을 진행해 주세요.');
                     return;
                 }
                 const viewYmdFromModal = dateVal.replace(/-/g, '');
@@ -991,7 +989,7 @@
                     })
                     .then(function(o) {
                         if (o.students.empty) {
-                            alert('학생을 먼저 등록후에 생성해주세요.');
+                            showMessageModal('학생을 먼저 등록후에 생성해주세요.');
                             return Promise.reject(new Error('no students'));
                         }
                         return db.collection('bta_task_detail').where('task_group_id', '==', selectedTaskGroupId).get()
@@ -1035,7 +1033,7 @@
                         const weekCd = (o.ctx.weekCd || '').toString().trim();
                         const students = o.filteredStudents || [];
                         if (students.length === 0 || o.details.empty) {
-                            alert('해당 반에 학생이 없거나 과제목록이 없습니다.');
+                            showMessageModal('해당 반에 학생이 없거나 과제목록이 없습니다.');
                             return Promise.reject(new Error('no data'));
                         }
                         var taskCdSeen = {};
@@ -1089,20 +1087,20 @@
                         });
                     })
                     .then(function() {
-                        alert('생성되었습니다.');
+                        showMessageModal('생성되었습니다.');
                         closeTaskCreateModal();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
                         if (err && err.message && (err.message === 'not found' || err.message === 'no class' || err.message === 'no data' || err.message === 'no students')) return;
                         console.error('과제목록 생성 오류:', err);
-                        alert('생성 중 오류가 발생했습니다.');
+                        showMessageModal('생성 중 오류가 발생했습니다.');
                     });
             }
             
             function doTaskCreateDelete() {
                 if (!selectedTaskGroupId) return;
-                if (!confirm('생성된 과제목록을 삭제하시겠습니까?')) return;
+                showConfirmModal('생성된 과제목록을 삭제하시겠습니까?', function() {
                 db.collection('bta_student_task').where('task_group_id', '==', selectedTaskGroupId).get()
                     .then(function(snap) {
                         const batch = db.batch();
@@ -1116,20 +1114,21 @@
                         });
                     })
                     .then(function() {
-                        alert('생성삭제되었습니다.');
+                        showMessageModal('생성삭제되었습니다.');
                         closeTaskCreateModal();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
                         console.error('생성삭제 오류:', err);
-                        alert('삭제 중 오류가 발생했습니다.');
+                        showMessageModal('삭제 중 오류가 발생했습니다.');
                     });
+            });
             }
             
             function doCopyTaskToGroup() {
                 const sourceId = document.getElementById('copySourceTaskGroupSelect').value;
                 if (!sourceId || !copyTargetTaskGroupId) {
-                    alert('복사할 주차를 선택하세요.');
+                    showMessageModal('복사할 주차를 선택하세요.');
                     return;
                 }
                 db.collection('bta_task_detail')
@@ -1137,7 +1136,7 @@
                     .get()
                     .then(function(snap) {
                         if (snap.empty) {
-                            alert('선택한 주차에 복사할 과제목록이 없습니다.');
+                            showMessageModal('선택한 주차에 복사할 과제목록이 없습니다.');
                             return;
                         }
                         const batch = db.batch();
@@ -1149,7 +1148,7 @@
                         return batch.commit();
                     })
                     .then(function() {
-                        alert('복사되었습니다.');
+                        showMessageModal('복사되었습니다.');
                         closeTaskGroupCopyModal();
                         if (selectedTaskGroupId === copyTargetTaskGroupId) {
                             loadTaskDetailData(copyTargetTaskGroupId);
@@ -1159,25 +1158,25 @@
                     .catch(function(err) {
                         if (err && err.message && err.message.includes('복사할 과제목록')) return;
                         console.error('과제복사 오류:', err);
-                        alert('복사 중 오류가 발생했습니다.');
+                        showMessageModal('복사 중 오류가 발생했습니다.');
                     });
             }
             
             function openTaskDetailAddModal() {
                 if (!selectedTaskGroupId) {
-                    alert('학기별 반별 주차등록을 먼저 선택해주세요.');
+                    showMessageModal('학기별 반별 주차등록을 먼저 선택해주세요.');
                     return;
                 }
                 
                 db.collection('bta_task_group').doc(selectedTaskGroupId).get()
                     .then(function(docSnap) {
                         if (!docSnap.exists) {
-                            alert('선택한 주차 정보를 찾을 수 없습니다.');
+                            showMessageModal('선택한 주차 정보를 찾을 수 없습니다.');
                             return;
                         }
                         const viewYmd = (docSnap.data().view_ymd || '').toString().trim();
                         if (viewYmd !== '') {
-                            alert('개시일이 있으면 등록이 안됩니다.');
+                            showMessageModal('개시일이 있으면 등록이 안됩니다.');
                             return;
                         }
                         isEditModeTaskDetail = false;
@@ -1189,7 +1188,7 @@
                     })
                     .catch(function(error) {
                         console.error('주차 조회 오류:', error);
-                        alert('주차 정보를 확인하는 중 오류가 발생했습니다.');
+                        showMessageModal('주차 정보를 확인하는 중 오류가 발생했습니다.');
                     });
             }
             
@@ -1212,14 +1211,14 @@
         
         function saveTaskDetail() {
                 if (!selectedTaskGroupId) {
-                    alert('학기별 반별 주차등록을 먼저 선택해주세요.');
+                    showMessageModal('학기별 반별 주차등록을 먼저 선택해주세요.');
                     return;
                 }
                 
                 const taskCd = document.getElementById('modalTaskDetailTask').value;
                 
                 if (!taskCd) {
-                    alert('과제목록은 필수 항목입니다.');
+                    showMessageModal('과제목록은 필수 항목입니다.');
                     return;
                 }
                 
@@ -1231,13 +1230,13 @@
                 if (isEditModeTaskDetail && editTaskDetailDocumentId) {
                     db.collection('bta_task_detail').doc(editTaskDetailDocumentId).update(data)
                         .then(function() {
-                            alert('수정되었습니다.');
+                            showMessageModal('수정되었습니다.');
                             closeTaskDetailModal();
                             loadTaskDetailData(selectedTaskGroupId);
                         })
                         .catch(function(error) {
                             console.error('수정 오류:', error);
-                            alert('수정 중 오류가 발생했습니다.');
+                            showMessageModal('수정 중 오류가 발생했습니다.');
                         });
                 } else {
                     db.collection('bta_task_detail')
@@ -1246,7 +1245,7 @@
                         .get()
                         .then(function(querySnapshot) {
                             if (!querySnapshot.empty) {
-                                alert('이미 등록된 과제목록입니다.');
+                                showMessageModal('이미 등록된 과제목록입니다.');
                                 return;
                             }
                             
@@ -1254,7 +1253,7 @@
                         })
                         .then(function(docRef) {
                             if (docRef) {
-                                alert('등록되었습니다.');
+                                showMessageModal('등록되었습니다.');
                                 closeTaskDetailModal();
                                 loadTaskDetailData(selectedTaskGroupId);
                             }
@@ -1264,37 +1263,34 @@
                             if (error.message && error.message.includes('이미 등록된')) {
                                 return;
                             }
-                            alert('등록 중 오류가 발생했습니다.');
+                            showMessageModal('등록 중 오류가 발생했습니다.');
                         });
                 }
             }
             
             function deleteTaskDetail(data) {
-                if (!confirm('정말 삭제하시겠습니까?')) {
-                    return;
-                }
-                
+                showConfirmModal('정말 삭제하시겠습니까?', function() {
                 const taskGroupId = (data.task_group_id || '').trim();
                 if (!taskGroupId) {
-                    alert('연결된 주차 정보를 찾을 수 없습니다.');
+                    showMessageModal('연결된 주차 정보를 찾을 수 없습니다.');
                     return;
                 }
                 
                 db.collection('bta_task_group').doc(taskGroupId).get()
                     .then(function(docSnap) {
                         if (!docSnap.exists) {
-                            alert('연결된 주차 정보를 찾을 수 없습니다.');
+                            showMessageModal('연결된 주차 정보를 찾을 수 없습니다.');
                             return Promise.reject(new Error('task_group not found'));
                         }
                         const viewYmd = (docSnap.data().view_ymd || '').toString().trim();
                         if (viewYmd !== '') {
-                            alert('개시일이 있으면 삭제가 안됩니다.');
+                            showMessageModal('개시일이 있으면 삭제가 안됩니다.');
                             return Promise.reject(new Error('view_ymd exists'));
                         }
                         return db.collection('bta_task_detail').doc(data.id).delete();
                     })
                     .then(function() {
-                        alert('삭제되었습니다.');
+                        showMessageModal('삭제되었습니다.');
                         loadTaskDetailData(selectedTaskGroupId);
                     })
                     .catch(function(error) {
@@ -1302,8 +1298,9 @@
                             return;
                         }
                         console.error('삭제 오류:', error);
-                        alert('삭제 중 오류가 발생했습니다.');
+                        showMessageModal('삭제 중 오류가 발생했습니다.');
                     });
+            });
             }
             
         
