@@ -128,7 +128,9 @@ def build_table_rows(rows):
 
 def send_resend_email(to_email, subject, html_body):
     if not RESEND_API_KEY or not to_email:
-        return False, 'RESEND_API_KEY or to_email missing'
+        msg = 'RESEND_API_KEY or to_email missing'
+        logger.error(msg)
+        return False, msg
     headers = {
         'Authorization': f'Bearer {RESEND_API_KEY}',
         'Content-Type': 'application/json',
@@ -144,8 +146,11 @@ def send_resend_email(to_email, subject, html_body):
         r = requests.post(RESEND_EMAIL_URL, headers=headers, json=payload, timeout=30)
         if r.status_code in (200, 201, 202):
             return True, None
-        return False, f'Resend API {r.status_code}: {r.text}'
+        err_msg = f'Resend API {r.status_code}: {r.text}'
+        logger.error(err_msg)
+        return False, err_msg
     except Exception as e:
+        logger.exception('Resend API request failed: %s', e)
         return False, str(e)
 
 
@@ -230,6 +235,12 @@ def run_daily_email():
 @app.route('/')
 def index():
     return {'status': 'ok', 'service': 'customerservice-daily-email'}, 200
+
+
+@app.before_request
+def _log_request():
+    if request.path == '/run':
+        logger.info('RESEND_API_KEY configured: %s', 'yes' if RESEND_API_KEY else 'NO')
 
 
 @app.route('/run', methods=['GET', 'POST'])

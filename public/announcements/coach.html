@@ -6,6 +6,15 @@
     <title>코치방 - 전달사항</title>
     <link rel="stylesheet" href="../static/style.css">
     <link rel="stylesheet" href="../static/announcements.css">
+    <style>
+        .progress-modal-overlay { position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:10001;display:flex;align-items:center;justify-content:center; }
+        .progress-modal-overlay.hidden { display:none; }
+        .progress-modal-box { background:#fff;padding:24px 32px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:280px;text-align:center; }
+        .progress-modal-box p { margin:0 0 16px 0;font-size:16px;font-weight:bold;color:#333; }
+        .progress-bar-wrap { height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden; }
+        .progress-bar-fill { height:100%;width:40%;background:#2563eb;border-radius:4px;animation:progressIndeterminate 1.2s ease-in-out infinite; }
+        @keyframes progressIndeterminate { 0%{transform:translateX(-100%);} 100%{transform:translateX(350%);} }
+    </style>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -145,6 +154,13 @@
         </div>
     </div>
     
+    <div id="progressModal" class="progress-modal-overlay hidden">
+        <div class="progress-modal-box">
+            <p>저장 중입니다...</p>
+            <div class="progress-bar-wrap"><div class="progress-bar-fill"></div></div>
+        </div>
+    </div>
+    
     <script>
         const auth = firebase.auth();
         const db = firebase.firestore();
@@ -189,8 +205,13 @@
         function setQuillContent(htmlOrText) {
             if (!quillEditor) return;
             var s = (htmlOrText || '').trim();
+            if (s.length === 0) {
+                quillEditor.setContents([{ insert: '\n' }], 'silent');
+                return;
+            }
             if (s.indexOf('<') !== -1) {
-                quillEditor.root.innerHTML = s;
+                var delta = quillEditor.clipboard.convert(s);
+                quillEditor.setContents(delta, 'silent');
             } else {
                 quillEditor.setText(s);
             }
@@ -227,11 +248,6 @@
         function formatDateYmdToDash(ymd) {
             if (!ymd || ymd.length !== 8) return '';
             return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
-        }
-        
-        function formatDateDashToYmd(dateStr) {
-            if (!dateStr) return '';
-            return dateStr.replace(/-/g, '');
         }
         
         function loadLookupLists() {
@@ -837,36 +853,19 @@
             }
         }
         
-        function downloadFile(filePath, fileName) {
-            const storageRef = storage.ref(filePath);
-            storageRef.getDownloadURL().then(function(url) {
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                link.click();
-            }).catch(function(error) {
-                console.error('파일 다운로드 오류:', error);
-                showMessageModal('파일 다운로드 중 오류가 발생했습니다.');
-            });
-        }
         
         function setSaveButtonEnabled(enabled) {
             isSaving = !enabled;
             var btn = document.getElementById('saveButton');
             if (btn) btn.disabled = !enabled;
         }
-        
-        function getUtf8ByteLength(str) {
-            if (typeof TextEncoder !== 'undefined') {
-                return new TextEncoder().encode(str || '').length;
-            }
-            var s = str || '';
-            var len = 0;
-            for (var i = 0; i < s.length; i++) {
-                var c = s.charCodeAt(i);
-                len += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
-            }
-            return len;
+        function showProgressModal() {
+            var el = document.getElementById('progressModal');
+            if (el) el.classList.remove('hidden');
+        }
+        function hideProgressModal() {
+            var el = document.getElementById('progressModal');
+            if (el) el.classList.add('hidden');
         }
         
         function saveAnnouncement() {
@@ -939,6 +938,8 @@
             const currentTimestamp = firebase.firestore.FieldValue.serverTimestamp();
             const currentUserId = currentUser ? currentUser.uid : '';
             
+            showProgressModal();
+            
             // 첨부파일 업로드
             const uploadPromises = [];
             if (fileInput.files && fileInput.files.length > 0) {
@@ -965,6 +966,7 @@
                 if (isEditMode && editDocumentId) {
                     db.collection('bta_notifications').doc(editDocumentId).get().then(function(doc) {
                         if (!doc.exists) {
+                            hideProgressModal();
                             setSaveButtonEnabled(true);
                             showMessageModal('전달사항을 찾을 수 없습니다.');
                             return;
@@ -1000,18 +1002,21 @@
                             // 수정
                             db.collection('bta_notifications').doc(editDocumentId).update(announcementData)
                                 .then(function() {
+                                    hideProgressModal();
                                     setSaveButtonEnabled(true);
                                     showMessageModal('수정되었습니다.');
                                     closeModal();
                                     loadAnnouncementData('', '', '');
                                 })
                                 .catch(function(error) {
+                                    hideProgressModal();
                                     setSaveButtonEnabled(true);
                                     console.error('수정 오류:', error);
                                     showMessageModal('수정 중 오류가 발생했습니다: ' + error.message);
                                 });
                         });
                     }).catch(function(error) {
+                        hideProgressModal();
                         setSaveButtonEnabled(true);
                         console.error('전달사항 조회 오류:', error);
                         showMessageModal('전달사항을 불러오는 중 오류가 발생했습니다.');
@@ -1035,18 +1040,21 @@
                     
                     db.collection('bta_notifications').add(announcementData)
                         .then(function() {
+                            hideProgressModal();
                             setSaveButtonEnabled(true);
                             showMessageModal('등록되었습니다.');
                             closeModal();
                             loadAnnouncementData('', '', '');
                         })
                         .catch(function(error) {
+                            hideProgressModal();
                             setSaveButtonEnabled(true);
                             console.error('등록 오류:', error);
                             showMessageModal('등록 중 오류가 발생했습니다: ' + error.message);
                         });
                 }
             }).catch(function(error) {
+                hideProgressModal();
                 setSaveButtonEnabled(true);
                 console.error('파일 업로드 오류:', error);
                 showMessageModal('파일 업로드 중 오류가 발생했습니다: ' + error.message);

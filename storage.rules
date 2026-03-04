@@ -1,13 +1,25 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // C/S 요청 첨부파일: 로그인한 사용자만 자신의 폴더에 업로드/다운로드
-    match /customerservice/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // 예전 경로(uploadFiles/): 로그인 사용자 읽기 허용(기존 데이터 호환)
+    match /uploadFiles/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
-    // 전달사항(공지) 첨부파일: 로그인한 사용자만 자신의 폴더에 업로드/다운로드
+    // C/S 요청 첨부파일: 로그인 사용자 모두 다운로드 가능, 업로드/삭제는 본인 폴더만
+    match /customerservice/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // 전달사항(공지) 첨부파일: 로그인 사용자 모두 다운로드 가능, 업로드/삭제는 본인 폴더만
     match /announcements/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // 그 외 모든 경로: 로그인 사용자 읽기 허용, 쓰기 거부 (bibleolympia 방식 참고)
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

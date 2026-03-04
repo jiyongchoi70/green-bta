@@ -235,8 +235,13 @@
         function setQuillContent(htmlOrText) {
             if (!quillEditor) return;
             var s = (htmlOrText || '').trim();
+            if (s.length === 0) {
+                quillEditor.setContents([{ insert: '\n' }], 'silent');
+                return;
+            }
             if (s.indexOf('<') !== -1) {
-                quillEditor.root.innerHTML = s;
+                var delta = quillEditor.clipboard.convert(s);
+                quillEditor.setContents(delta, 'silent');
             } else {
                 quillEditor.setText(s);
             }
@@ -271,11 +276,6 @@
         function formatDateYmdToDash(ymd) {
             if (!ymd || ymd.length !== 8) return '';
             return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
-        }
-        
-        function formatDateDashToYmd(dateStr) {
-            if (!dateStr) return '';
-            return dateStr.replace(/-/g, '');
         }
         
         function loadLookupLists() {
@@ -810,18 +810,6 @@
             if (saveButton) saveButton.style.display = '';
         }
         
-        function downloadFile(filePath, fileName) {
-            const storageRef = storage.ref(filePath);
-            storageRef.getDownloadURL().then(function(url) {
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                link.click();
-            }).catch(function(error) {
-                console.error('파일 다운로드 오류:', error);
-                showMessageModal('파일 다운로드 중 오류가 발생했습니다.');
-            });
-        }
         
         function setSaveButtonEnabled(enabled) {
             isSaving = !enabled;
@@ -836,19 +824,6 @@
         function hideProgressModal() {
             var el = document.getElementById('progressModal');
             if (el) { el.classList.add('hidden'); }
-        }
-        
-        function getUtf8ByteLength(str) {
-            if (typeof TextEncoder !== 'undefined') {
-                return new TextEncoder().encode(str || '').length;
-            }
-            var s = str || '';
-            var len = 0;
-            for (var i = 0; i < s.length; i++) {
-                var c = s.charCodeAt(i);
-                len += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
-            }
-            return len;
         }
         
         function saveCsRequest() {

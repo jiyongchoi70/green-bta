@@ -41,27 +41,112 @@ function showConfirmModal(message, onConfirm, onCancel) {
         overlay.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center;';
         overlay.innerHTML = '<div style="position:relative;z-index:1;background:#fff;padding:24px 32px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:280px;max-width:90%;text-align:center;"><p id="btaConfirmModalText" style="margin:0 0 20px 0;font-size:16px;color:#333;white-space:pre-wrap;"></p><div style="display:flex;justify-content:center;gap:10px;"><button type="button" id="btaConfirmModalCancel" style="padding:10px 24px;background:#e5e7eb;color:#333;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;">취소</button><button type="button" id="btaConfirmModalOk" style="padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;">확인</button></div></div>';
         document.body.appendChild(overlay);
+        overlay._currentConfirm = null;
+        overlay._currentCancel = null;
         document.getElementById('btaConfirmModalOk').addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             overlay.style.display = 'none';
-            if (typeof onConfirm === 'function') onConfirm();
+            var cb = overlay._currentConfirm;
+            if (typeof cb === 'function') cb();
         });
         document.getElementById('btaConfirmModalCancel').addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             overlay.style.display = 'none';
-            if (typeof onCancel === 'function') onCancel();
+            var cb = overlay._currentCancel;
+            if (typeof cb === 'function') cb();
         });
         overlay.addEventListener('click', function(e) {
             if (e.target === overlay) {
                 overlay.style.display = 'none';
-                if (typeof onCancel === 'function') onCancel();
+                var cb = overlay._currentCancel;
+                if (typeof cb === 'function') cb();
             }
         });
     }
+    overlay._currentConfirm = onConfirm;
+    overlay._currentCancel = onCancel;
     document.getElementById('btaConfirmModalText').textContent = message || '';
     overlay.style.display = 'flex';
+}
+
+/**
+ * Firebase Storage 파일 다운로드
+ * @param {string} filePath - Storage 경로
+ * @param {string} fileName - 다운로드 파일명
+ * @param {object} [firebaseRefs] - { storage, currentUser } (없으면 firebase 전역 사용)
+ */
+function downloadFile(filePath, fileName, firebaseRefs) {
+    var storage = (firebaseRefs && firebaseRefs.storage) || (typeof firebase !== 'undefined' && firebase.storage && firebase.storage());
+    var currentUser = (firebaseRefs && firebaseRefs.currentUser) || (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser);
+    if (!currentUser) {
+        showMessageModal('다운로드하려면 로그인이 필요합니다.');
+        return;
+    }
+    if (!filePath || !fileName) {
+        showMessageModal('파일 정보가 없습니다.');
+        return;
+    }
+    var projectId = (typeof firebase !== 'undefined' && firebase.app && firebase.app().options && firebase.app().options.projectId) || '';
+    var bucket = (typeof firebase !== 'undefined' && firebase.app && firebase.app().options && firebase.app().options.storageBucket) || (projectId + '.firebasestorage.app');
+    function tryDownload(ref) {
+        return ref.getDownloadURL().then(function(url) {
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = fileName || 'download';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.click();
+        });
+    }
+    function doDownload() {
+        var primaryRef = storage.ref(filePath);
+        return tryDownload(primaryRef).catch(function(err) {
+            if ((err && err.code === 'storage/unknown') || (err && err.message && String(err.message).indexOf('412') !== -1)) {
+                var altBucket = projectId + '.appspot.com';
+                if (altBucket !== bucket) {
+                    var altRef = storage.refFromURL('gs://' + altBucket + '/' + filePath);
+                    return tryDownload(altRef);
+                }
+            }
+            throw err;
+        });
+    }
+    currentUser.getIdToken(true).then(doDownload).catch(function(error) {
+        console.error('파일 다운로드 오류:', error);
+        if (error && error.code === 'storage/object-not-found') {
+            showMessageModal('파일을 찾을 수 없습니다.');
+        } else if (error && error.code === 'storage/unauthorized') {
+            showMessageModal('다운로드 권한이 없습니다. 로그인 상태를 확인해 주세요.');
+        } else {
+            showMessageModal('파일 다운로드 중 오류가 발생했습니다.');
+        }
+    });
+}
+
+/**
+ * UTF-8 바이트 길이 계산
+ */
+function getUtf8ByteLength(str) {
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(str || '').length;
+    }
+    var s = str || '';
+    var len = 0;
+    for (var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        len += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+    }
+    return len;
+}
+
+/**
+ * YYYY-MM-DD → YYYYMMDD 변환
+ */
+function formatDateDashToYmd(dashStr) {
+    if (!dashStr || typeof dashStr !== 'string') return '';
+    return dashStr.replace(/-/g, '');
 }
 
 function getLookupValueName(db, p_type_cd, p_value_cd, p_ymd) {
