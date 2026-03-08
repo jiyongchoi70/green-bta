@@ -6,7 +6,7 @@
 const MENU_CONFIG = {
     // 컬럼 정의 (권한별로 표시 여부 결정)
     columns: {
-        '코치방': { userTypes: ['110', '130'] },
+        '스탭방': { userTypes: ['110', '130'] },
         '학생방': { userTypes: ['100', '130'] },
         '학부모방': { userTypes: ['120', '130'] },
         '관리자': { userTypes: ['130'] }
@@ -17,7 +17,7 @@ const MENU_CONFIG = {
         // 첫 번째 행: 전달사항 (모든 권한에서 보이지만 URL이 다름)
         {
             label: '전달사항',
-            column: '코치방',
+            column: '스탭방',
             rowIndex: 0,
             links: {
                 '110': './announcements/coach.html',
@@ -56,7 +56,7 @@ const MENU_CONFIG = {
         // 두 번째 행
         {
             label: '과제제출확인',
-            column: '코치방',
+            column: '스탭방',
             rowIndex: 1,
             link: './menu/coach/student-select.html',
             userTypes: ['110', '130']

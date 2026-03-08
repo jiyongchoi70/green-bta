@@ -33,7 +33,7 @@ if __name__ == '__main__':
         room_types = ['coach', 'student', 'parent', 'system']
         for room_type in room_types:
             room_names = {
-                'coach': '코치방',
+                'coach': '스탭방',
                 'student': '학생방',
                 'parent': '학부모방',
                 'system': '관리자'
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         for room_type in room_types:
             for menu_item, menu_name in menu_items.items():
                 room_names = {
-                    'coach': '코치방',
+                    'coach': '스탭방',
                     'student': '학생방',
                     'parent': '학부모님',
                     'system': '시스템'

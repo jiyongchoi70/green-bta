@@ -747,12 +747,32 @@
         
         function deleteStudent(data) {
             showConfirmModal('정말 삭제하시겠습니까?', function() {
-            db.collection('bta_class_students').doc(data.id).delete()
+            var semesterCd = (selectedClassSemesterCd || '').toString().trim();
+            var classCd = (selectedClassClassCd || '').toString().trim();
+            var userId = (data.userId || data.user_id || '').toString().trim();
+            if (!semesterCd || !classCd || !userId) {
+                showMessageModal('삭제할 학생 정보가 올바르지 않습니다.');
+                return;
+            }
+            db.collection('bta_student_task')
+                .where('semester_cd', '==', semesterCd)
+                .where('class_cd', '==', classCd)
+                .where('user_id', '==', userId)
+                .limit(1)
+                .get()
+                .then(function(snap) {
+                    if (!snap.empty) {
+                        showMessageModal('과제가 등록되어 있습니다. 삭제할 수 없습니다.');
+                        return Promise.reject(new Error('has_task'));
+                    }
+                    return db.collection('bta_class_students').doc(data.id).delete();
+                })
                 .then(function() {
                     showMessageModal('삭제되었습니다.');
                     loadStudentData(selectedClassId);
                 })
                 .catch(function(error) {
+                    if (error && error.message === 'has_task') return;
                     console.error('삭제 오류:', error);
                     showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                 });

@@ -6,6 +6,15 @@
     <title>과제목록 관리 - BTA</title>
     <link rel="stylesheet" href="../../static/style.css">
     <link rel="stylesheet" href="../../static/task_list.css">
+    <style>
+        .progress-modal-overlay { position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:10001;display:flex;align-items:center;justify-content:center; }
+        .progress-modal-overlay.hidden { display:none; }
+        .progress-modal-box { background:#fff;padding:24px 32px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:280px;text-align:center; }
+        .progress-modal-box p { margin:0 0 16px 0;font-size:16px;font-weight:bold;color:#333; }
+        .progress-bar-wrap { height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden; }
+        .progress-bar-fill { height:100%;width:40%;background:#2563eb;border-radius:4px;animation:progressIndeterminate 1.2s ease-in-out infinite; }
+        @keyframes progressIndeterminate { 0%{transform:translateX(-100%);} 100%{transform:translateX(350%);} }
+    </style>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -208,6 +217,13 @@
                     <button id="taskCreateCancelButton" class="cancel-button">취소</button>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <div id="taskListProgressModal" class="progress-modal-overlay hidden">
+        <div class="progress-modal-box">
+            <p>처리 중입니다...</p>
+            <div class="progress-bar-wrap"><div class="progress-bar-fill"></div></div>
         </div>
     </div>
     
@@ -914,6 +930,15 @@
                 document.getElementById('taskCreateModal').style.display = 'none';
             }
             
+            function showTaskListProgressModal() {
+                var el = document.getElementById('taskListProgressModal');
+                if (el) el.classList.remove('hidden');
+            }
+            function hideTaskListProgressModal() {
+                var el = document.getElementById('taskListProgressModal');
+                if (el) el.classList.add('hidden');
+            }
+
             function setTaskCreateButtonState(completeYnIsY) {
                 var createBtn = document.getElementById('taskCreateDoCreateButton');
                 var deleteBtn = document.getElementById('taskCreateDoDeleteButton');
@@ -960,6 +985,7 @@
                     return;
                 }
                 const viewYmdFromModal = dateVal.replace(/-/g, '');
+                showTaskListProgressModal();
                 db.collection('bta_task_group').doc(selectedTaskGroupId).get()
                     .then(function(docSnap) {
                         if (!docSnap.exists) return Promise.reject(new Error('not found'));
@@ -989,6 +1015,7 @@
                     })
                     .then(function(o) {
                         if (o.students.empty) {
+                            hideTaskListProgressModal();
                             showMessageModal('학생을 먼저 등록후에 생성해주세요.');
                             return Promise.reject(new Error('no students'));
                         }
@@ -1033,6 +1060,7 @@
                         const weekCd = (o.ctx.weekCd || '').toString().trim();
                         const students = o.filteredStudents || [];
                         if (students.length === 0 || o.details.empty) {
+                            hideTaskListProgressModal();
                             showMessageModal('해당 반에 학생이 없거나 과제목록이 없습니다.');
                             return Promise.reject(new Error('no data'));
                         }
@@ -1087,12 +1115,17 @@
                         });
                     })
                     .then(function() {
+                        hideTaskListProgressModal();
                         showMessageModal('생성되었습니다.');
                         closeTaskCreateModal();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
-                        if (err && err.message && (err.message === 'not found' || err.message === 'no class' || err.message === 'no data' || err.message === 'no students')) return;
+                        if (err && err.message && (err.message === 'not found' || err.message === 'no class' || err.message === 'no data' || err.message === 'no students')) {
+                            hideTaskListProgressModal();
+                            return;
+                        }
+                        hideTaskListProgressModal();
                         console.error('과제목록 생성 오류:', err);
                         showMessageModal('생성 중 오류가 발생했습니다.');
                     });
@@ -1101,6 +1134,7 @@
             function doTaskCreateDelete() {
                 if (!selectedTaskGroupId) return;
                 showConfirmModal('생성된 과제목록을 삭제하시겠습니까?', function() {
+                showTaskListProgressModal();
                 db.collection('bta_student_task').where('task_group_id', '==', selectedTaskGroupId).get()
                     .then(function(snap) {
                         const batch = db.batch();
@@ -1114,11 +1148,13 @@
                         });
                     })
                     .then(function() {
+                        hideTaskListProgressModal();
                         showMessageModal('생성삭제되었습니다.');
                         closeTaskCreateModal();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
+                        hideTaskListProgressModal();
                         console.error('생성삭제 오류:', err);
                         showMessageModal('삭제 중 오류가 발생했습니다.');
                     });

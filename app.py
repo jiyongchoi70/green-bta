@@ -27,7 +27,7 @@ def forgot_password_page():
 @app.route('/announcements/<room_type>')
 def announcements(room_type):
     room_names = {
-        'coach': '코치방',
+        'coach': '스탭방',
         'student': '학생방',
         'parent': '학부모방',
         'system': '관리자'
@@ -43,7 +43,7 @@ def test_organization():
 @app.route('/menu/<room_type>/<menu_item>')
 def menu_page(room_type, menu_item):
     room_names = {
-        'coach': '코치방',
+        'coach': '스탭방',
         'student': '학생방',
         'parent': '부모님방',
         'system': '시스템'
