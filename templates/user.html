@@ -244,7 +244,7 @@
                 headerName: '삭제',
                 width: 90,
                 cellRenderer: function(params) {
-                    return '<button class="delete-btn">삭제</button>';
+                    return '<button type="button" class="delete-btn">삭제</button>';
                 },
                 onCellClicked: function(params) {
                     deleteUser(params.data);
@@ -467,13 +467,58 @@
         }
         
         function deleteUser(data) {
+            if (!data || !data.id) {
+                showMessageModal('삭제할 사용자 정보가 올바르지 않습니다.');
+                return;
+            }
             showConfirmModal('정말 삭제하시겠습니까?', function() {
-            db.collection('bta_users').doc(data.id).delete()
-                .then(function() {
-                    showMessageModal('삭제되었습니다.');
-                    loadUserData('', '', '', '');
-                })
-                .catch(function(error) {
+                var documentId = data.id;
+                var uid = (data.userId || '').toString().trim();
+
+                var deleteFromFirestore = function() {
+                    return db.collection('bta_users').doc(documentId).delete()
+                        .then(function() {
+                            showMessageModal('삭제되었습니다.');
+                            loadUserData('', '', '', '');
+                        });
+                };
+
+                var doDelete = function() {
+                    var currentUser = firebase.auth().currentUser;
+                    if (!currentUser) {
+                        showMessageModal('로그인이 필요합니다.');
+                        return Promise.resolve();
+                    }
+                    if (uid) {
+                        return currentUser.getIdToken(true)
+                            .then(function(idToken) {
+                                return fetch('/api/delete-user', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': 'Bearer ' + idToken
+                                    },
+                                    body: JSON.stringify({ uid: uid, document_id: documentId })
+                                });
+                            })
+                            .then(function(res) {
+                                if (res.ok) return deleteFromFirestore();
+                                if (res.status === 404) return deleteFromFirestore();
+                                return res.json().then(function(body) {
+                                    var msg = (body && body.error) ? body.error : ('삭제 실패: ' + res.status);
+                                    throw new Error(msg);
+                                }).catch(function() { throw new Error('삭제 실패: ' + res.status); });
+                            })
+                            .catch(function(error) {
+                                console.warn('Auth 삭제 중 오류 (Firestore 삭제 계속 진행):', error);
+                                return deleteFromFirestore();
+                            });
+                    } else {
+                        return deleteFromFirestore();
+                    }
+                };
+
+                doDelete().catch(function(error) {
                     console.error('삭제 오류:', error);
                     showMessageModal('삭제 중 오류가 발생했습니다: ' + error.message);
                 });

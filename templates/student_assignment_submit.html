@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>학생방 - 과제제출확인</title>
+    <title>훈련생방 - 과제제출확인</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='task_list.css') }}">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -53,7 +53,7 @@
                             </select>
                         </div>
                         <div class="search-field">
-                            <label><span class="required-field">*</span>학생</label>
+                            <label><span class="required-field">*</span>훈련생</label>
                             <select id="searchStudent" class="search-select" title="로그인한 본인" disabled style="min-width: 140px;">
                                 <option value="">선택하세요</option>
                             </select>
@@ -714,7 +714,7 @@
                 if (v) loadClassOptions(v);
             });
 
-            // 학생방: 반 선택 시 재조회하지 않음. 조회는 '조회' 버튼 클릭 시에만 수행.
+            // 훈련생방: 반 선택 시 재조회하지 않음. 조회는 '조회' 버튼 클릭 시에만 수행.
         });
 
         auth.onAuthStateChanged(function(user) {

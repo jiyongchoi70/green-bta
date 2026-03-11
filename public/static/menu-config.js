@@ -7,7 +7,7 @@ const MENU_CONFIG = {
     // 컬럼 정의 (권한별로 표시 여부 결정)
     columns: {
         '스탭방': { userTypes: ['110', '130'] },
-        '학생방': { userTypes: ['100', '130'] },
+        '훈련생방': { userTypes: ['100', '130'] },
         '학부모방': { userTypes: ['120', '130'] },
         '관리자': { userTypes: ['130'] }
     },
@@ -27,7 +27,7 @@ const MENU_CONFIG = {
         },
         {
             label: '전달사항',
-            column: '학생방',
+            column: '훈련생방',
             rowIndex: 0,
             links: {
                 '100': './announcements/student.html',
@@ -61,7 +61,7 @@ const MENU_CONFIG = {
             link: './menu/coach/student-select.html',
             userTypes: ['110', '130']
         },
-        // 학생방 - 기록과제물 삭제됨
+        // 훈련생방 - 기록과제물 삭제됨
         {
             label: '과제제출확인',
             column: '학부모방',
@@ -80,7 +80,7 @@ const MENU_CONFIG = {
         // 세 번째 행
         {
             label: '과제제출확인',
-            column: '학생방',
+            column: '훈련생방',
             rowIndex: 1,
             link: './menu/student/assignment-submit.html',
             userTypes: ['100', '130']

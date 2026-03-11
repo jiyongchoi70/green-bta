@@ -3,7 +3,7 @@ import os
 
 try:
     import firebase_admin
-    from firebase_admin import credentials, firestore, storage
+    from firebase_admin import credentials, firestore, storage, auth
     FIREBASE_ADMIN_AVAILABLE = True
 except ImportError:
     FIREBASE_ADMIN_AVAILABLE = False

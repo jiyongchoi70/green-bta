@@ -3,6 +3,13 @@
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "bta-app",
+          "region": "asia-northeast3"
+        }
+      },
       {"source": "/", "destination": "/login.html"},
       {"source": "/announcements/**", "destination": "/index.html"},
       {"source": "/menu/**", "destination": "/index.html"},
@@ -11,5 +18,8 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions"
   }
 }

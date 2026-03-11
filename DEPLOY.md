@@ -69,6 +69,33 @@ gcloud run deploy bta-app --source . --region asia-northeast3
 }
 ```
 
+### 3단계: Firebase Authentication 관리자 역할 부여 (사용자 삭제 시 Auth 삭제용)
+
+사용자 관리 화면에서 삭제 시 **Firebase Authentication** 계정까지 삭제하려면, Cloud Run이 사용하는 **서비스 계정**에 Firebase Auth 관리 권한이 있어야 합니다.
+
+**방법 A – Google Cloud 콘솔에서 부여**
+
+1. [Google Cloud Console](https://console.cloud.google.com/) 접속 후 프로젝트 **greentree-bta** 선택  
+2. 왼쪽 메뉴 **IAM 및 관리자** → **IAM**  
+3. Cloud Run 서비스(bta-app)가 사용하는 서비스 계정 찾기  
+   - 보통 `프로젝트번호-compute@developer.gserviceaccount.com` (기본 Compute Engine 서비스 계정)  
+   - 또는 Cloud Run 서비스 상세 페이지 **보안** 탭에서 “서비스 계정” 확인  
+4. 해당 계정 행의 **연필(편집)** 클릭  
+5. **다른 역할 추가** → **Firebase Authentication Admin** 검색 후 선택  
+6. **저장**
+
+**방법 B – gcloud 명령어**
+
+```bash
+# 1) Cloud Run 서비스 계정 이메일 확인 (보통 아래와 같음)
+# 2) 역할 부여 (프로젝트번호는 실제 숫자로 변경)
+gcloud projects add-iam-policy-binding greentree-bta \
+  --member="serviceAccount:프로젝트번호-compute@developer.gserviceaccount.com" \
+  --role="roles/firebaseauth.admin"
+```
+
+프로젝트 번호는 **Firebase 콘솔** → 프로젝트 설정(톱니바퀴) → **일반** 탭에서 확인할 수 있습니다.
+
 ## 주의사항
 
 1. **정적 파일 배포 시**: 
