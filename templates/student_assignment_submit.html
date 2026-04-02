@@ -263,10 +263,58 @@
         }
 
         var assignmentSubmitGridApi = null;
+        var studentAssignmentSubmitSearchSnapshot = null;
+
+        function studentAssignmentSubmitGridRowCount() {
+            if (!assignmentSubmitGridApi) return 0;
+            var n = 0;
+            assignmentSubmitGridApi.forEachNode(function() { n++; });
+            return n;
+        }
+
+        function commitStudentAssignmentSubmitSnapshot(semesterCd, classCd) {
+            studentAssignmentSubmitSearchSnapshot = {
+                semesterCd: (semesterCd || '').toString(),
+                classCd: (classCd || '').toString()
+            };
+        }
+
+        function clearStudentAssignmentSubmitSnapshot() {
+            studentAssignmentSubmitSearchSnapshot = null;
+        }
+
+        function canProceedStudentAssignmentSubmitAction() {
+            var semester = document.getElementById('searchSemester').value;
+            var cls = document.getElementById('searchClass').value;
+            var student = document.getElementById('searchStudent').value;
+            if (!semester || !cls) {
+                showMessageModal('학기, 반을 선택한 후 조회해주세요.');
+                return false;
+            }
+            if (!student) {
+                showMessageModal('학생 정보를 확인할 수 없습니다. 다시 로그인해주세요.');
+                return false;
+            }
+            var snap = studentAssignmentSubmitSearchSnapshot;
+            if (snap === null) {
+                if (studentAssignmentSubmitGridRowCount() === 0) {
+                    showMessageModal('학기, 반을 선택한 후 조회해주세요.');
+                    return false;
+                }
+                showMessageModal('학기, 반을 조회해 주세요.');
+                return false;
+            }
+            if (semester !== snap.semesterCd || cls !== snap.classCd) {
+                showMessageModal('학기, 반을 조회해 주세요.');
+                return false;
+            }
+            return true;
+        }
 
         function loadAssignmentSubmitDataStudent(semesterCd, classCd, userid) {
             if (!assignmentSubmitGridApi || !userid) {
                 if (assignmentSubmitGridApi) assignmentSubmitGridApi.setGridOption('rowData', []);
+                clearStudentAssignmentSubmitSnapshot();
                 return;
             }
             assignmentSubmitGridApi.setGridOption('rowData', []);
@@ -353,9 +401,11 @@
                 })
                 .then(function(rows) {
                     assignmentSubmitGridApi.setGridOption('rowData', rows);
+                    commitStudentAssignmentSubmitSnapshot(semesterCd, classCd);
                 })
                 .catch(function(err) {
                     console.error('과제제출확인 조회 오류:', err);
+                    clearStudentAssignmentSubmitSnapshot();
                     showMessageModal('조회 중 오류가 발생했습니다.');
                 });
         }
@@ -394,12 +444,9 @@
                 if (!event.event || !event.event.target) return;
                 var btn = event.event.target.closest ? event.event.target.closest('.create-btn') : null;
                 if (!btn) return;
+                if (!canProceedStudentAssignmentSubmitAction()) return;
                 var semester = document.getElementById('searchSemester').value;
                 var cls = document.getElementById('searchClass').value;
-                if (!semester || !cls) {
-                    showMessageModal('학기, 반을 선택한 후 조회해주세요.');
-                    return;
-                }
                 var row = event.data;
                 if (!row) return;
                 if (event.colDef.headerName === '기록과제물') {
@@ -577,6 +624,8 @@
             var modalBody = document.getElementById('recordTaskModalBody');
             if (classCd === '100') {
                 modalBody.innerHTML = '<div style="margin-bottom: 20px;"><h4 style="margin-bottom: 10px;">■ 성경질문</h4><textarea id="bibleDescInput" style="width: 100%; height: 400px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; font-family: inherit;" placeholder="성경질문을 입력하세요"></textarea></div><div class="form-buttons" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;"><button id="recordTaskSaveButton" class="save-button">제출</button><button id="recordTaskTempSaveButton" class="save-button">임시저장</button><button id="recordTaskCancelButton" class="cancel-button">취소</button></div>';
+            } else if (classCd === '110') {
+                modalBody.innerHTML = '<div style="margin-bottom: 20px;"><h4 style="margin-bottom: 10px;">■ 성경질문</h4><textarea id="bibleDescInput" style="width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; font-family: inherit;" placeholder="성경질문을 입력하세요"></textarea></div><div style="margin-bottom: 20px;"><h4 style="margin-bottom: 10px;">■ 말씀에서 &lt;기쁜 것&gt;, &lt;긴장한 것&gt;을 기록</h4><textarea id="wordLearnInput" style="width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; font-family: inherit;" placeholder="말씀에서 &lt;기쁜 것&gt;, &lt;긴장한 것&gt;을 기록하세요"></textarea></div><div class="form-buttons" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;"><button id="recordTaskSaveButton" class="save-button">제출</button><button id="recordTaskTempSaveButton" class="save-button">임시저장</button><button id="recordTaskCancelButton" class="cancel-button">취소</button></div>';
             } else {
                 modalBody.innerHTML = '<div style="margin-bottom: 20px;"><h4 style="margin-bottom: 10px;">■ 성경질문</h4><textarea id="bibleDescInput" style="width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; font-family: inherit;" placeholder="성경질문을 입력하세요"></textarea></div><div style="margin-bottom: 20px;"><h4 style="margin-bottom: 10px;">■ 말씀에 배운 점</h4><textarea id="wordLearnInput" style="width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; font-family: inherit;" placeholder="말씀에 배운 점을 입력하세요"></textarea></div><div class="form-buttons" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;"><button id="recordTaskSaveButton" class="save-button">제출</button><button id="recordTaskTempSaveButton" class="save-button">임시저장</button><button id="recordTaskCancelButton" class="cancel-button">취소</button></div>';
             }
@@ -639,7 +688,7 @@
             var bibleDesc = bibleDescInput ? bibleDescInput.value.trim() : '';
             var wordLearn = wordLearnInput ? wordLearnInput.value.trim() : '';
             if (!bibleDesc) { showMessageModal('성경질문을 입력해주세요.'); if (bibleDescInput) bibleDescInput.focus(); return; }
-            if (ctx.classCd === '110' && !wordLearn) { showMessageModal('말씀에 배운 점을 입력해주세요.'); if (wordLearnInput) wordLearnInput.focus(); return; }
+            if (ctx.classCd === '110' && !wordLearn) { showMessageModal('말씀에서 <기쁜 것>, <긴장한 것>을 입력해주세요.'); if (wordLearnInput) wordLearnInput.focus(); return; }
             var data = { bible_desc: bibleDesc };
             if (ctx.classCd === '110') data.word_learn = wordLearn;
             db.collection('bta_student_report').where('semester_cd', '==', ctx.semesterCd).where('class_cd', '==', ctx.classCd).where('week_cd', '==', ctx.weekCd).where('user_id', '==', ctx.userid).limit(1).get()

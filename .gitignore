@@ -17,6 +17,9 @@ env/
 firebase-debug.log
 .firebase/*.cache
 
+# Node (Firebase Functions)
+functions/node_modules/
+
 # Local config (if any)
 .env
 .env.local
