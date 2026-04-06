@@ -260,6 +260,112 @@
                 if (!ymd || ymd.length !== 8) return '';
                 return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
             }
+
+            /** 과제목록 생성 시 bta_student_score 문서 ID (학기·반·주차·학생당 1건) */
+            function buildStudentScoreDocId(semesterCd, classCd, weekCd, userid) {
+                function seg(s) {
+                    return String(s || '').trim().replace(/\//g, '_').replace(/\s+/g, '_');
+                }
+                return [seg(semesterCd), seg(classCd), seg(weekCd), seg(userid)].join('_');
+            }
+
+            function commitStudentScoreStubsForTaskGroup(semesterCd, classCd, weekCd, students) {
+                if (!semesterCd || !classCd || !weekCd || !students || students.length === 0) {
+                    return Promise.resolve();
+                }
+                var ymd = getCurrentDateYmd();
+                var BATCH = 400;
+                var idx = 0;
+                function runNext() {
+                    if (idx >= students.length) return Promise.resolve();
+                    var batch = db.batch();
+                    var n = 0;
+                    while (idx < students.length && n < BATCH) {
+                        var uid = (students[idx].user_id || '').toString().trim();
+                        idx++;
+                        if (!uid) continue;
+                        var docId = buildStudentScoreDocId(semesterCd, classCd, weekCd, uid);
+                        var ref = db.collection('bta_student_score').doc(docId);
+                        batch.set(ref, {
+                            semester_cd: semesterCd,
+                            class_cd: classCd,
+                            week_cd: weekCd,
+                            userid: uid,
+                            create_ymd: ymd
+                        }, { merge: true });
+                        n++;
+                    }
+                    return batch.commit().then(runNext);
+                }
+                return runNext();
+            }
+
+            function deleteStudentScoreStubsForTaskGroup(semesterCd, classCd, weekCd, students) {
+                if (!semesterCd || !classCd || !weekCd || !students || students.length === 0) {
+                    return Promise.resolve();
+                }
+                var BATCH = 400;
+                var idx = 0;
+                function runNext() {
+                    if (idx >= students.length) return Promise.resolve();
+                    var batch = db.batch();
+                    var n = 0;
+                    while (idx < students.length && n < BATCH) {
+                        var uid = (students[idx].user_id || '').toString().trim();
+                        idx++;
+                        if (!uid) continue;
+                        var docId = buildStudentScoreDocId(semesterCd, classCd, weekCd, uid);
+                        batch.delete(db.collection('bta_student_score').doc(docId));
+                        n++;
+                    }
+                    return batch.commit().then(runNext);
+                }
+                return runNext();
+            }
+
+            /** 주차 그룹 기준 반 학생 목록(훈련생 user_type 100) — 점수 스텁 생성/삭제 공통 */
+            function fetchStudentsForTaskGroupScore(taskGroupDocId) {
+                return db.collection('bta_task_group').doc(taskGroupDocId).get()
+                    .then(function(docSnap) {
+                        if (!docSnap.exists) return null;
+                        var btg = docSnap.data();
+                        var semesterCd = (btg.semester_cd || '').toString().trim();
+                        var classCd = (btg.class_cd || '').toString().trim();
+                        var weekCd = (btg.week_cd || '').toString().trim();
+                        if (!semesterCd || !classCd) return null;
+                        return db.collection('bta_class')
+                            .where('semester_cd', '==', semesterCd)
+                            .where('class_cd', '==', classCd)
+                            .limit(1)
+                            .get()
+                            .then(function(classSnap) {
+                                if (classSnap.empty) return null;
+                                var classId = classSnap.docs[0].id;
+                                return db.collection('bta_class_students').where('class_id', '==', classId).get()
+                                    .then(function(studentsSnap) {
+                                        return db.collection('bta_users').where('user_type', '==', '100').get()
+                                            .then(function(userSnap) {
+                                                var studentUserIds = {};
+                                                userSnap.forEach(function(doc) {
+                                                    var uid = (doc.data().userId || doc.data().userid || '').toString().trim();
+                                                    if (uid) studentUserIds[uid] = true;
+                                                });
+                                                var filteredStudents = [];
+                                                studentsSnap.forEach(function(doc) {
+                                                    var userid = (doc.data().userid || doc.data().userId || '').toString().trim();
+                                                    if (userid && studentUserIds[userid]) filteredStudents.push({ user_id: userid });
+                                                });
+                                                return {
+                                                    semesterCd: semesterCd,
+                                                    classCd: classCd,
+                                                    weekCd: weekCd,
+                                                    students: filteredStudents
+                                                };
+                                            });
+                                    });
+                            });
+                    });
+            }
             
             const taskGroupColumnDefs = [
                 {
@@ -1105,7 +1211,9 @@
                                     });
                                 });
                             });
-                            return batch.commit();
+                            return batch.commit().then(function() {
+                                return commitStudentScoreStubsForTaskGroup(semesterCd, classCd, weekCd, students);
+                            });
                         });
                     })
                     .then(function() {
@@ -1140,6 +1248,18 @@
                         const batch = db.batch();
                         snap.forEach(function(doc) { batch.delete(doc.ref); });
                         return batch.commit();
+                    })
+                    .then(function() {
+                        return fetchStudentsForTaskGroupScore(selectedTaskGroupId);
+                    })
+                    .then(function(scoreCtx) {
+                        if (!scoreCtx || !scoreCtx.weekCd) return Promise.resolve();
+                        return deleteStudentScoreStubsForTaskGroup(
+                            scoreCtx.semesterCd,
+                            scoreCtx.classCd,
+                            scoreCtx.weekCd,
+                            scoreCtx.students
+                        );
                     })
                     .then(function() {
                         return db.collection('bta_task_group').doc(selectedTaskGroupId).update({

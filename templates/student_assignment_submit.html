@@ -126,6 +126,13 @@
             return ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
         }
 
+        function buildStudentScoreDocId(semesterCd, classCd, weekCd, userid) {
+            function seg(s) {
+                return String(s || '').trim().replace(/\//g, '_').replace(/\s+/g, '_');
+            }
+            return [seg(semesterCd), seg(classCd), seg(weekCd), seg(userid)].join('_');
+        }
+
         var userClassIds = [];
         var semesterCreateYmdMap = {};
         var classCreateYmdMap = {};
@@ -596,13 +603,14 @@
             });
             Promise.all(promises)
                 .then(function() {
-                    return db.collection('bta_student_score').where('semester_cd', '==', ctx.semesterCd).where('class_cd', '==', ctx.classCd).where('week_cd', '==', ctx.weekCd).where('userid', '==', ctx.userid).limit(1).get();
-                })
-                .then(function(snap) {
-                    if (snap.empty) {
-                        return db.collection('bta_student_score').add({ semester_cd: ctx.semesterCd, class_cd: ctx.classCd, week_cd: ctx.weekCd, userid: ctx.userid, task_score: sumScore });
-                    }
-                    return snap.docs[0].ref.update({ task_score: sumScore });
+                    var docId = buildStudentScoreDocId(ctx.semesterCd, ctx.classCd, ctx.weekCd, ctx.userid);
+                    return db.collection('bta_student_score').doc(docId).set({
+                        semester_cd: ctx.semesterCd,
+                        class_cd: ctx.classCd,
+                        week_cd: ctx.weekCd,
+                        userid: ctx.userid,
+                        task_score: sumScore
+                    }, { merge: true });
                 })
                 .then(function() {
                     showMessageModal('저장되었습니다.');
@@ -711,11 +719,14 @@
         }
 
         function updateBibleMark(ctx) {
-            return db.collection('bta_student_score').where('semester_cd', '==', ctx.semesterCd).where('class_cd', '==', ctx.classCd).where('week_cd', '==', ctx.weekCd).where('userid', '==', ctx.userid).limit(1).get()
-                .then(function(snap) {
-                    if (snap.empty) return db.collection('bta_student_score').add({ semester_cd: ctx.semesterCd, class_cd: ctx.classCd, week_cd: ctx.weekCd, userid: ctx.userid, bible_mark: 'Y' });
-                    return snap.docs[0].ref.update({ bible_mark: 'Y' });
-                });
+            var docId = buildStudentScoreDocId(ctx.semesterCd, ctx.classCd, ctx.weekCd, ctx.userid);
+            return db.collection('bta_student_score').doc(docId).set({
+                semester_cd: ctx.semesterCd,
+                class_cd: ctx.classCd,
+                week_cd: ctx.weekCd,
+                userid: ctx.userid,
+                bible_mark: 'Y'
+            }, { merge: true });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
