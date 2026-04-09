@@ -200,7 +200,7 @@
             <div class="modal-body">
                 <table class="modal-form">
                     <tr>
-                        <td><span class="required-field">*</span> 개시일</td>
+                        <td>개시일</td>
                         <td><input type="date" id="taskCreateViewYmd" class="modal-input" max="9999-12-31"></td>
                     </tr>
                 </table>
@@ -1062,22 +1062,29 @@
                         setTaskCreateButtonState(completeYn === 'Y');
                     });
             }
-            
+
             function saveTaskCreateViewYmd() {
                 if (!selectedTaskGroupId) return;
                 const dateVal = document.getElementById('taskCreateViewYmd').value.trim();
-                if (!dateVal) {
-                    showMessageModal('개시일을 입력해주세요.');
-                    return;
-                }
-                const viewYmd = dateVal.replace(/-/g, '');
-                db.collection('bta_task_group').doc(selectedTaskGroupId).update({ view_ymd: viewYmd })
+                db.collection('bta_task_detail').where('task_group_id', '==', selectedTaskGroupId).limit(1).get()
+                    .then(function(detailSnap) {
+                        const hasDetail = !detailSnap.empty;
+                        if (!hasDetail && dateVal) {
+                            showMessageModal('과제목록을 등록한 후 개시일을 등록할 수 있습니다.');
+                            return Promise.reject(new Error('validation view ymd'));
+                        }
+                        const payload = dateVal
+                            ? { view_ymd: dateVal.replace(/-/g, '') }
+                            : { view_ymd: null };
+                        return db.collection('bta_task_group').doc(selectedTaskGroupId).update(payload);
+                    })
                     .then(function() {
                         showMessageModal('저장되었습니다.');
                         refreshTaskCreateModalButtons();
                         loadTaskGroupList();
                     })
                     .catch(function(err) {
+                        if (err && err.message === 'validation view ymd') return;
                         console.error('개시일 저장 오류:', err);
                         showMessageModal('저장 중 오류가 발생했습니다.');
                     });
